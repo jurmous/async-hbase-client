@@ -8,6 +8,25 @@ This project implements the whole RPC layer upon a Netty based stack to be non-b
 particularly useful in event-driven applications in which blocking threads are unwanted. It also
 enables more types of async RPC calls than Hbase enables. (Which is currently mostly row based)
 
+# Download
+
+## Maven
+```xml
+<dependency>
+  <groupId>org.mousio</groupId>
+  <artifactId>async-hbase-client</artifactId>
+  <version>0.7.0</version>
+</dependency>
+```
+
+## Gradle
+```
+compile 'org.mousio:async-hbase-client:0.7.0'
+```
+
+## Manually
+Visit [AHC Github releases page](https://github.com/jurmous/async-hbase-client/releases)
+
 # Current status
 
 This project is new and not yet battle tested in all areas. It is based on the Hbase implementation
