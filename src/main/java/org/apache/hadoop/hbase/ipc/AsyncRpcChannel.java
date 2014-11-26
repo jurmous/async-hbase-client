@@ -60,7 +60,7 @@ public class AsyncRpcChannel implements RpcChannel {
   // Exists when in state of connecting
   private ChannelFuture connectFuture;
 
-  private String name;
+  String name;
   final RpcClient.ConnectionId remoteId;
   ConcurrentSkipListMap<Integer, HbaseCall> calls = new ConcurrentSkipListMap<>();
 
@@ -173,7 +173,7 @@ public class AsyncRpcChannel implements RpcChannel {
           }
         });
 
-        name = ("IPC Client (" + channel.id().asShortText() + ") connection to " +
+        name = ("IPC Client (" + channel.hashCode() + ") connection to " +
             AsyncRpcChannel.this.remoteId.getAddress().toString() +
             ((AsyncRpcChannel.this.remoteId.ticket == null) ? " from an unknown user" : (" from "
                 + AsyncRpcChannel.this.remoteId.ticket.getName())));

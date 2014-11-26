@@ -44,7 +44,7 @@ public class HbaseResponseHandler extends ChannelInboundHandlerAdapter {
       RPCProtos.ResponseHeader responseHeader = RPCProtos.ResponseHeader.parseDelimitedFrom(in);
       int id = responseHeader.getCallId();
       if (LOG.isDebugEnabled()) {
-        LOG.debug(ctx.channel().id().asLongText() + ": got response header " +
+        LOG.debug(channel.name + ": got response header " +
             TextFormat.shortDebugString(responseHeader) + ", totalSize: " + totalSize + " bytes");
       }
       HbaseCall call = channel.calls.get(id);
