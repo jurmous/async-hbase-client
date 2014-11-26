@@ -34,8 +34,6 @@ sourceSets {
 
 dependencies {
     compile 'io.netty:netty-codec-http:4.0.23.Final'
-    compile 'org.mousio:etcd4j:0.4.14:client'
-    compile 'org.slf4j:slf4j-api:1.7.7'
     compile('org.apache.hbase:hbase-client:' + hbaseVersion) {
         exclude group: 'org.slf4j'
     }
