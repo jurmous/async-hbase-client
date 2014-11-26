@@ -6,7 +6,7 @@ also use the same security features for Sasl based authentication.
 
 This project implements the whole RPC layer upon a Netty based stack to be non-blocking. This is
 particularly useful in event-driven applications in which blocking threads are unwanted. It also
-enables more types of async RPC calls than Hbase enables. (Which is mostly row based)
+enables more types of async RPC calls than Hbase enables. (Which is currently mostly row based)
 
 # Current status
 
@@ -105,18 +105,17 @@ try{
 Scanners are a bit different in AHC to better fit the async process. It supports all the parameters in
 scan and enables you to do small and reversed scans.
 
-**BE AWARE:** Each instance of a scanner which is not set to ```setSmall(true)``` opens a process on the server. You need to close any instance of
-the scanner if you don't continue until the end. So close it if you don't continue after an exception
-or any other reason with ```scanner.close()```. The scanner is automatically closed when the scan reached
-the end row of scan or region or has retrieved its max amount of results defined by ```scan.setMaxResultSize(int)```.
+**BE AWARE:** Each instance of a scanner which is not set to ```setSmall(true)``` opens a process on the server.
+You need to close any instance of the scanner if you don't continue until the end. So close it if you don't
+continue after an exception or any other reason with ```scanner.close()```. The scanner is automatically
+closed when the scan reached the end row of scan or region or has retrieved its max amount of results
+defined by ```scan.setMaxResultSize(int)```.
 
 ```Java
 
 Scan scan = new Scan();
 // The amount of items to fetch in one batch. By default it will take the HBase default which is 100.
 scan.setCaching(50);
-// Reverses the scan.
-scan.setReversed(true);
 
 final AsyncResultScanner scanner = client.getScanner(TEST_TABLE, scan);
 
@@ -127,7 +126,7 @@ scanner.nextBatch(new ResponseHandler<Result[]>() {
 
     // Continue with the next batch after work is done
     // You can also do it anywhere to ensure the fetching of all batches
-    if(!scanner.isDone()){
+    if(!scanner.isScanDone()){
        scanner.nextBatch(this);
     }
  }
@@ -138,3 +137,8 @@ scanner.nextBatch(new ResponseHandler<Result[]>() {
 });
 
 ```
+
+# More examples
+
+Check out [HbaseClientTest](https://github.com/jurmous/async-hbase-client/blob/master/src/test/java/mousio/hbase/async/HbaseClientTest.java)
+for more examples of the API.
