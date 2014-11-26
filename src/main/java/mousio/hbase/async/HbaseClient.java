@@ -483,7 +483,7 @@ public class HbaseClient extends AbstractHbaseClient implements Closeable {
   }
 
   /**
-   * See {@link #incrementColumnValue(TableName, byte[], byte[], byte[], long, Durability, H)}
+   * See {@link #incrementColumnValue(TableName, byte[], byte[], byte[], long, Durability, ResponseHandler)}
    * <p/>
    * The {@link Durability} is defaulted to {@link Durability#SYNC_WAL}.
    *
