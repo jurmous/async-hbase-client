@@ -5,6 +5,7 @@ package org.apache.hadoop.hbase.client;
  */
 public abstract class AbstractHbaseClient {
   protected final String clusterId;
+  private final HConnection connection;
 
   /**
    * Constructor
@@ -12,6 +13,16 @@ public abstract class AbstractHbaseClient {
    * @param connection to use for connection
    */
   public AbstractHbaseClient(HConnection connection) {
+    this.connection = connection;
     this.clusterId = ((HConnectionManager.HConnectionImplementation) connection).clusterId;
+  }
+
+  /**
+   * Get HConnection to talk to master/cluster
+   *
+   * @return HConnection
+   */
+  public HConnection getConnection() {
+    return connection;
   }
 }
