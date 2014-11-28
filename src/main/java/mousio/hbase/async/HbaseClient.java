@@ -673,7 +673,7 @@ public class HbaseClient extends AbstractHbaseClient implements Closeable {
    * @param promise to handle result
    * @return new RpcController
    */
-  public RpcController newRpcController(HbaseResponsePromise<?> promise) {
+  public RpcController newRpcController(ResponseHandler<?> promise) {
     return this.client.newRpcController(promise);
   }
 
