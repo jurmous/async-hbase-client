@@ -1,12 +1,12 @@
-Async-hbase-client (AHC) is an asynchronous HBase client based mostly on the client code of Hbase itself.
-It works with the same Put, Get, Delete, Scan, Increment, Append classes as in the Hbase client. This way it is
- easy to support all current and future features in Hbase.
+Async-hbase-client (AHC) is an asynchronous HBase client based mostly on the client code of HBase itself.
+It works with the same Put, Get, Delete, Scan, Increment, Append classes. This way it is
+ easy to support all the current and future features in HBase.
 It works with the same configuration settings as HBase so old configs can be easily recycled. It will
 also use the same security features for SASL based authentication.
 
 This project implements the whole RPC layer upon a Netty based stack to be non-blocking. This is
 particularly useful in event-driven applications in which blocking threads are unwanted. It also
-enables more types of async RPC calls than Hbase enables which is currently mostly row based.
+enables more types of async RPC calls than HBase enables which is currently mostly row based.
 
 # Download
 
@@ -27,14 +27,14 @@ compile 'org.mousio:async-hbase-client:0.7.1'
 ## Manually
 Visit [AHC Github releases page](https://github.com/jurmous/async-hbase-client/releases)
 
-# Currently supported Hbase version
+# Currently supported HBase version
 
-This implementation is based on Hbase 0.98. But since it is based on the protobuf api it should be
-able to communicate with different versions of Hbase using the version "0" api.
+This implementation is based on HBase 0.98. But since it is based on the protobuf api it should be
+able to communicate with different versions of HBase using the version "0" api.
 
 # Current status
 
-This project is new and not yet battle tested in all areas. It is based on the Hbase implementation
+This project is new and not yet battle tested in all areas. It is based on the HBase client
 so it should do all the same things but bugs could still be present. Please report issues and they will be fixed.
 
 Supported:
@@ -51,9 +51,9 @@ Supported:
   * Coprocessor on single row
 
 Implemented but needs to be checked:
-* Security. Simple/Kerberos. It is based on Hbase implementation but refactored to work in a Netty Stack.
-* Scans spanning multiple regions. It is based on Hbase implementation but refactored to be Async.
-* Call failover. It is based on Hbase implementation but refactored to be Async.
+* Security. Simple/Kerberos. It is based on the HBase implementation but refactored to work in a Netty Stack.
+* Scans spanning multiple regions. It is based on the HBase implementation but refactored to be Async.
+* Call failover. It is based on the HBase implementation but refactored to be Async.
 
 Not yet implemented:
 * Coprocessor over multiple rows/regions. Please provide an example since I am currently not using one yet.
@@ -67,7 +67,7 @@ Not yet implemented:
 Configuration configuration = ...;// Your HBase configuration
 connection = HConnectionManager.createConnection(configuration);
 
-client = new HbaseClient(connection);
+client = new HBaseClient(connection);
 
 // Do your magic here
 
@@ -117,8 +117,8 @@ that fits the rest of your application by extending it and implement ResponseHan
 ```Java
 
 // Both promises fire their Rpc calls immediately on creation, so neither is blocking the other.
-HbaseResponsePromise<Void> promise1 = client.put(table1, put1, client.<Void>newPromise());
-HbaseResponsePromise<Void> promise2 = client.put(table2, put2, client.<Void>newPromise());
+HBaseResponsePromise<Void> promise1 = client.put(table1, put1, client.<Void>newPromise());
+HBaseResponsePromise<Void> promise2 = client.put(table2, put2, client.<Void>newPromise());
 
 try{
   // Block until result
@@ -169,5 +169,5 @@ scanner.nextBatch(new ResponseHandler<Result[]>() {
 
 # More examples
 
-Check out [HbaseClientTest](https://github.com/jurmous/async-hbase-client/blob/master/src/test/java/mousio/hbase/async/HbaseClientTest.java)
+Check out [HBaseClientTest](https://github.com/jurmous/async-hbase-client/blob/master/src/test/java/mousio/hbase/async/HBaseClientTest.java)
 for more examples of the API.
