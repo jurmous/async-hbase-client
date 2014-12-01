@@ -1,12 +1,12 @@
 Async-hbase-client (AHC) is an asynchronous HBase client based mostly on the client code of Hbase itself.
-It works with the same Put, Get, Delete, Scan, Increment, Append classes as in Hbase itself. This way it is
+It works with the same Put, Get, Delete, Scan, Increment, Append classes as in the Hbase client. This way it is
  easy to support all current and future features in Hbase.
 It works with the same configuration settings as HBase so old configs can be easily recycled. It will
-also use the same security features for Sasl based authentication.
+also use the same security features for SASL based authentication.
 
 This project implements the whole RPC layer upon a Netty based stack to be non-blocking. This is
 particularly useful in event-driven applications in which blocking threads are unwanted. It also
-enables more types of async RPC calls than Hbase enables. (Which is currently mostly row based)
+enables more types of async RPC calls than Hbase enables which is currently mostly row based.
 
 # Download
 
@@ -27,6 +27,11 @@ compile 'org.mousio:async-hbase-client:0.7.1'
 ## Manually
 Visit [AHC Github releases page](https://github.com/jurmous/async-hbase-client/releases)
 
+# Currently supported Hbase version
+
+This implementation is based on Hbase 0.98. But since it is based on the protobuf api it should be
+able to communicate with different versions of Hbase using the version 1 api.
+
 # Current status
 
 This project is new and not yet battle tested in all areas. It is based on the Hbase implementation
@@ -46,7 +51,7 @@ Supported:
   * Coprocessor on single row
 
 Implemented but needs to be checked:
-* Security. Simple/Kerberos. It is based on Hbase implementation but refactored to work in Netty Stack.
+* Security. Simple/Kerberos. It is based on Hbase implementation but refactored to work in a Netty Stack.
 * Scans spanning multiple regions. It is based on Hbase implementation but refactored to be Async.
 * Call failover. It is based on Hbase implementation but refactored to be Async.
 
@@ -63,6 +68,11 @@ Configuration configuration = ...;// Your HBase configuration
 connection = HConnectionManager.createConnection(configuration);
 
 client = new HbaseClient(connection);
+
+// Do your magic here
+
+// Don't forget to close the client after use or when you exit your application.
+client.close()
 
 ```
 
@@ -100,13 +110,13 @@ client.put(table, get, new ResponseHandler<Result>() {
 # Promise
 
 ResponseHandler class handles all responses. But sometimes you want to call a command in a blocking
-way. A promise can be created on the client to handle any responses. The build in promise is hooked
-to the event loop of the netty client communicating to HBase. You can also use another type of promise
-that fits the rest of your application by extending it with ResponseHandler.
+way. A promise can be created on the client to handle any responses. The included promise is hooked
+to the event loop of the Netty client communicating to HBase. You can also use another type of promise
+that fits the rest of your application by extending it and implement ResponseHandler.
 
 ```Java
 
-// Both promises fire their Rpc calls immediately on creation, so neither is blocking the other
+// Both promises fire their Rpc calls immediately on creation, so neither is blocking the other.
 HbaseResponsePromise<Void> promise1 = client.put(table1, put1, client.<Void>newPromise());
 HbaseResponsePromise<Void> promise2 = client.put(table2, put2, client.<Void>newPromise());
 
