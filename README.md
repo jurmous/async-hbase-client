@@ -15,13 +15,13 @@ enables more types of async RPC calls than HBase enables which is currently most
 <dependency>
   <groupId>org.mousio</groupId>
   <artifactId>async-hbase-client</artifactId>
-  <version>0.7.1</version>
+  <version>0.8.0</version>
 </dependency>
 ```
 
 ## Gradle
 ```
-compile 'org.mousio:async-hbase-client:0.7.1'
+compile 'org.mousio:async-hbase-client:0.8.0'
 ```
 
 ## Manually
