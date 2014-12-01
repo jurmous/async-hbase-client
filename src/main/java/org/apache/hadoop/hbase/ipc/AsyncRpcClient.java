@@ -319,12 +319,12 @@ public class AsyncRpcClient {
    *
    * @param table  to get location of
    * @param row    to get location of
-   * @param reload
+   * @param reload true to force reloading the location and not to use the cache.
    * @return Region location
    * @throws java.io.IOException if connection fetching fails
    */
   public HRegionLocation getRegionLocation(TableName table, byte[] row, boolean reload) throws IOException {
-    return this.connection.getRegionLocation(table, row, false);
+    return this.connection.getRegionLocation(table, row, reload);
   }
 
   /**
