@@ -11,13 +11,13 @@ import java.io.IOException;
  *
  * @param <T> Type of response promised
  */
-public class HbaseResponsePromise<T> extends DefaultPromise<T> implements ResponseHandler<T> {
+public class HBaseResponsePromise<T> extends DefaultPromise<T> implements ResponseHandler<T> {
   /**
    * Constructor
    *
    * @param executor for promise
    */
-  public HbaseResponsePromise(EventExecutor executor) {
+  public HBaseResponsePromise(EventExecutor executor) {
     super(executor);
   }
 

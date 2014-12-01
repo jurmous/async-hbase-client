@@ -62,7 +62,7 @@ public class AsyncRpcChannel implements RpcChannel {
 
   String name;
   final RpcClient.ConnectionId remoteId;
-  ConcurrentSkipListMap<Integer, HbaseCall> calls = new ConcurrentSkipListMap<>();
+  ConcurrentSkipListMap<Integer, HBaseCall> calls = new ConcurrentSkipListMap<>();
 
   int rpcTimeout;
   private int ioFailureCounter = 0;
@@ -163,7 +163,7 @@ public class AsyncRpcChannel implements RpcChannel {
           }
         }
 
-        f.channel().pipeline().addLast(new HbaseResponseHandler(AsyncRpcChannel.this));
+        f.channel().pipeline().addLast(new HBaseResponseHandler(AsyncRpcChannel.this));
 
         writeChannelHeader(f.channel()).addListener(new GenericFutureListener<ChannelFuture>() {
           @Override public void operationComplete(ChannelFuture future) throws Exception {
@@ -232,7 +232,7 @@ public class AsyncRpcChannel implements RpcChannel {
 
   @Override
   public void callMethod(final Descriptors.MethodDescriptor method, final RpcController controller, final com.google.protobuf.Message request, final Message responsePrototype, final RpcCallback<Message> done) {
-    HbaseCall call = new HbaseCall(method, request, (AsyncPayloadCarryingRpcController) controller, responsePrototype, done);
+    HBaseCall call = new HBaseCall(method, request, (AsyncPayloadCarryingRpcController) controller, responsePrototype, done);
     calls.put(call.id, call);
 
     if (channel != null) {
@@ -246,7 +246,7 @@ public class AsyncRpcChannel implements RpcChannel {
    * @param channel to write to
    */
   private void sendRequestsAfterConnect(Channel channel) {
-    for (HbaseCall call : calls.values()) {
+    for (HBaseCall call : calls.values()) {
       writeRequest(channel, call);
     }
   }
@@ -292,7 +292,7 @@ public class AsyncRpcChannel implements RpcChannel {
    * @param channel to write to
    * @param call    to write
    */
-  private void writeRequest(Channel channel, HbaseCall call) {
+  private void writeRequest(Channel channel, HBaseCall call) {
     try {
       if (shouldCloseConnection) {
         return;
@@ -479,7 +479,7 @@ public class AsyncRpcChannel implements RpcChannel {
       cleanupTimer = null;
     }
 
-    for (HbaseCall call : calls.values()) {
+    for (HBaseCall call : calls.values()) {
       long waitTime = System.currentTimeMillis() - call.getStartTime();
       if (waitTime >= rpcTimeout) {
         closeException = new RpcClient.CallTimeoutException("Call id=" + call.id +
@@ -491,7 +491,7 @@ public class AsyncRpcChannel implements RpcChannel {
       }
     }
     if (!calls.isEmpty()) {
-      HbaseCall firstCall = calls.firstEntry().getValue();
+      HBaseCall firstCall = calls.firstEntry().getValue();
       long maxWaitTime = System.currentTimeMillis() - firstCall.getStartTime();
       if (maxWaitTime < rpcTimeout) {
         rpcTimeout -= maxWaitTime;

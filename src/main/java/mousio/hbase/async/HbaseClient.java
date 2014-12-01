@@ -29,7 +29,7 @@ import static org.apache.hadoop.hbase.protobuf.RequestConverter.buildMutateReque
 /**
  * Hbase client.
  */
-public class HbaseClient extends AbstractHbaseClient implements Closeable {
+public class HBaseClient extends AbstractHBaseClient implements Closeable {
   private final AsyncRpcClient client;
 
   /**
@@ -38,7 +38,7 @@ public class HbaseClient extends AbstractHbaseClient implements Closeable {
    * @param connection to Hbase
    * @throws java.io.IOException if HConnection could not be set up
    */
-  public HbaseClient(HConnection connection) throws IOException {
+  public HBaseClient(HConnection connection) throws IOException {
     super(connection);
 
     this.client = new AsyncRpcClient(connection, this.clusterId, null);
@@ -659,8 +659,8 @@ public class HbaseClient extends AbstractHbaseClient implements Closeable {
    * @param <T> Type of response to return
    * @return Hbase Response Promise
    */
-  public <T> HbaseResponsePromise<T> newPromise() {
-    return new HbaseResponsePromise<>(client.getEventLoop());
+  public <T> HBaseResponsePromise<T> newPromise() {
+    return new HBaseResponsePromise<>(client.getEventLoop());
   }
 
   @Override public void close() throws IOException {

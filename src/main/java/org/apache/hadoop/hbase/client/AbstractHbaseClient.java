@@ -3,7 +3,7 @@ package org.apache.hadoop.hbase.client;
 /**
  * Abstract class necessary to access protected parameters
  */
-public abstract class AbstractHbaseClient {
+public abstract class AbstractHBaseClient {
   protected final String clusterId;
   private final HConnection connection;
 
@@ -12,7 +12,7 @@ public abstract class AbstractHbaseClient {
    *
    * @param connection to use for connection
    */
-  public AbstractHbaseClient(HConnection connection) {
+  public AbstractHBaseClient(HConnection connection) {
     this.connection = connection;
     this.clusterId = ((HConnectionManager.HConnectionImplementation) connection).clusterId;
   }

@@ -38,11 +38,11 @@ import static org.apache.hadoop.hbase.protobuf.RequestConverter.buildGetRequest;
 import static org.junit.Assert.*;
 
 @Category(MediumTests.class)
-public class HbaseClientTest {
+public class HBaseClientTest {
   public static final TableName TEST_TABLE = TableName.valueOf("TestTable");
   private static final HBaseTestingUtility util = new HBaseTestingUtility();
   private static final byte[] DEFAULT_FAMILY = "f".getBytes();
-  private static HbaseClient client;
+  private static HBaseClient client;
   private static HConnection connection;
 
   @BeforeClass
@@ -54,7 +54,7 @@ public class HbaseClientTest {
     util.createTable(desc, new byte[][]{DEFAULT_FAMILY}, util.getConfiguration());
 
     connection = HConnectionManager.createConnection(util.getConfiguration());
-    client = new HbaseClient(connection);
+    client = new HBaseClient(connection);
   }
 
   @AfterClass
@@ -298,7 +298,7 @@ public class HbaseClientTest {
   public void testCoprocessor() throws Exception {
     byte[] row = new byte[]{12};
 
-    final HbaseResponsePromise<Result> promise = client.newPromise();
+    final HBaseResponsePromise<Result> promise = client.newPromise();
 
     ClientProtos.ClientService.newStub(client.coprocessorService(TEST_TABLE, row)).get(
         client.newRpcController(promise),

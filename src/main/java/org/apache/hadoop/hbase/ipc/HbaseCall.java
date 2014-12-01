@@ -15,8 +15,8 @@ import java.io.IOException;
 /**
  * Handles HBase responses
  */
-public class HbaseCall {
-  public static final Log LOG = LogFactory.getLog(HbaseCall.class.getName());
+public class HBaseCall {
+  public static final Log LOG = LogFactory.getLog(HBaseCall.class.getName());
 
   private static int idCounter = 0;
 
@@ -38,7 +38,7 @@ public class HbaseCall {
    * @param responseDefaultType the default response type
    * @param doneHandler         done handler
    */
-  public HbaseCall(Descriptors.MethodDescriptor md, Message param, AsyncPayloadCarryingRpcController controller,
+  public HBaseCall(Descriptors.MethodDescriptor md, Message param, AsyncPayloadCarryingRpcController controller,
                    Message responseDefaultType, RpcCallback<Message> doneHandler) {
 
     this.method = md;

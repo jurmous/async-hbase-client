@@ -17,8 +17,8 @@ import java.io.IOException;
 /**
  * Handles Hbase responses
  */
-public class HbaseResponseHandler extends ChannelInboundHandlerAdapter {
-  public static final Log LOG = LogFactory.getLog(HbaseResponseHandler.class.getName());
+public class HBaseResponseHandler extends ChannelInboundHandlerAdapter {
+  public static final Log LOG = LogFactory.getLog(HBaseResponseHandler.class.getName());
 
   private final AsyncRpcChannel channel;
 
@@ -27,7 +27,7 @@ public class HbaseResponseHandler extends ChannelInboundHandlerAdapter {
    *
    * @param channel on which this response handler operates
    */
-  public HbaseResponseHandler(AsyncRpcChannel channel) {
+  public HBaseResponseHandler(AsyncRpcChannel channel) {
     this.channel = channel;
   }
 
@@ -47,7 +47,7 @@ public class HbaseResponseHandler extends ChannelInboundHandlerAdapter {
         LOG.debug(channel.name + ": got response header " +
             TextFormat.shortDebugString(responseHeader) + ", totalSize: " + totalSize + " bytes");
       }
-      HbaseCall call = channel.calls.get(id);
+      HBaseCall call = channel.calls.get(id);
       if (call == null) {
         // So we got a response for which we have no corresponding 'call' here on the client-side.
         // We probably timed out waiting, cleaned up all references, and now the server decides
