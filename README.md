@@ -30,7 +30,7 @@ Visit [AHC Github releases page](https://github.com/jurmous/async-hbase-client/r
 # Currently supported Hbase version
 
 This implementation is based on Hbase 0.98. But since it is based on the protobuf api it should be
-able to communicate with different versions of Hbase using the version 1 api.
+able to communicate with different versions of Hbase using the version "0" api.
 
 # Current status
 
