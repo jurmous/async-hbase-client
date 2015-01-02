@@ -18,11 +18,15 @@
 package org.apache.hadoop.hbase.security;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.ipc.RemoteException;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
@@ -38,6 +42,7 @@ import java.util.Random;
 /**
  * Handles Sasl connections
  */
+@InterfaceAudience.Private
 public class SaslClientHandler extends ChannelDuplexHandler {
   public static final Log LOG = LogFactory.getLog(SaslClientHandler.class);
 
@@ -48,6 +53,7 @@ public class SaslClientHandler extends ChannelDuplexHandler {
    */
   private final SaslClient saslClient;
   private final SaslExceptionHandler exceptionHandler;
+  private final SaslSuccessfulConnectHandler successfulConnectHandler;
   private byte[] saslToken;
   private boolean firstRead = true;
 
@@ -57,57 +63,51 @@ public class SaslClientHandler extends ChannelDuplexHandler {
   /**
    * Constructor
    *
-   * @param method           auth method
-   * @param token            for Sasl
-   * @param serverPrincipal  Server's Kerberos principal name
-   * @param fallbackAllowed  True if server may also fall back to less secure connection
-   * @param rpcProtection    Quality of protection. Integrity or privacy
-   * @param exceptionHandler handler for exceptions
-   * @throws IOException if handler could not be created
+   * @param method                   auth method
+   * @param token                    for Sasl
+   * @param serverPrincipal          Server's Kerberos principal name
+   * @param fallbackAllowed          True if server may also fall back to less secure connection
+   * @param rpcProtection            Quality of protection. Integrity or privacy
+   * @param exceptionHandler         handler for exceptions
+   * @param successfulConnectHandler handler for succesful connects
+   * @throws java.io.IOException if handler could not be created
    */
-  public SaslClientHandler(AuthMethod method,
-                           Token<? extends TokenIdentifier> token,
-                           String serverPrincipal,
-                           boolean fallbackAllowed,
-                           String rpcProtection,
-                           SaslExceptionHandler exceptionHandler) throws IOException {
+  public SaslClientHandler(AuthMethod method, Token<? extends TokenIdentifier> token,
+      String serverPrincipal, boolean fallbackAllowed, String rpcProtection,
+      SaslExceptionHandler exceptionHandler, SaslSuccessfulConnectHandler successfulConnectHandler)
+      throws IOException {
     this.fallbackAllowed = fallbackAllowed;
 
     this.exceptionHandler = exceptionHandler;
+    this.successfulConnectHandler = successfulConnectHandler;
 
     SaslUtil.initSaslProperties(rpcProtection);
     switch (method) {
-      case DIGEST:
-        if (LOG.isDebugEnabled())
-          LOG.debug("Creating SASL " + AuthMethod.DIGEST.getMechanismName()
-              + " client to authenticate to service at " + token.getService());
-        saslClient = createDigestSaslClient(
-            new String[]{AuthMethod.DIGEST.getMechanismName()},
-            SaslUtil.SASL_DEFAULT_REALM, new HBaseSaslRpcClient.SaslClientCallbackHandler(token));
-        break;
-      case KERBEROS:
-        if (LOG.isDebugEnabled()) {
-          LOG
-              .debug("Creating SASL " + AuthMethod.KERBEROS.getMechanismName()
-                  + " client. Server's Kerberos principal name is "
-                  + serverPrincipal);
-        }
-        if (serverPrincipal == null || serverPrincipal.isEmpty()) {
-          throw new IOException(
-              "Failed to specify server's Kerberos principal name");
-        }
-        String names[] = SaslUtil.splitKerberosName(serverPrincipal);
-        if (names.length != 3) {
-          throw new IOException(
-              "Kerberos principal does not have the expected format: "
-                  + serverPrincipal);
-        }
-        saslClient = createKerberosSaslClient(
-            new String[]{AuthMethod.KERBEROS.getMechanismName()},
-            names[0], names[1]);
-        break;
-      default:
-        throw new IOException("Unknown authentication method " + method);
+    case DIGEST:
+      if (LOG.isDebugEnabled())
+        LOG.debug("Creating SASL " + AuthMethod.DIGEST.getMechanismName()
+            + " client to authenticate to service at " + token.getService());
+      saslClient = createDigestSaslClient(new String[] { AuthMethod.DIGEST.getMechanismName() },
+          SaslUtil.SASL_DEFAULT_REALM, new HBaseSaslRpcClient.SaslClientCallbackHandler(token));
+      break;
+    case KERBEROS:
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Creating SASL " + AuthMethod.KERBEROS.getMechanismName()
+            + " client. Server's Kerberos principal name is " + serverPrincipal);
+      }
+      if (serverPrincipal == null || serverPrincipal.isEmpty()) {
+        throw new IOException("Failed to specify server's Kerberos principal name");
+      }
+      String[] names = SaslUtil.splitKerberosName(serverPrincipal);
+      if (names.length != 3) {
+        throw new IOException(
+            "Kerberos principal does not have the expected format: " + serverPrincipal);
+      }
+      saslClient = createKerberosSaslClient(new String[] { AuthMethod.KERBEROS.getMechanismName() },
+          names[0], names[1]);
+      break;
+    default:
+      throw new IOException("Unknown authentication method " + method);
     }
     if (saslClient == null)
       throw new IOException("Unable to find SASL client implementation");
@@ -120,13 +120,12 @@ public class SaslClientHandler extends ChannelDuplexHandler {
    * @param saslDefaultRealm          default realm for sasl
    * @param saslClientCallbackHandler handler for the client
    * @return new SaslClient
-   * @throws IOException if creation went wrong
+   * @throws java.io.IOException if creation went wrong
    */
-  protected SaslClient createDigestSaslClient(String[] mechanismNames,
-                                              String saslDefaultRealm, CallbackHandler saslClientCallbackHandler)
-      throws IOException {
-    return Sasl.createSaslClient(mechanismNames, null, null, saslDefaultRealm,
-        SaslUtil.SASL_PROPS, saslClientCallbackHandler);
+  protected SaslClient createDigestSaslClient(String[] mechanismNames, String saslDefaultRealm,
+      CallbackHandler saslClientCallbackHandler) throws IOException {
+    return Sasl.createSaslClient(mechanismNames, null, null, saslDefaultRealm, SaslUtil.SASL_PROPS,
+        saslClientCallbackHandler);
   }
 
   /**
@@ -136,78 +135,68 @@ public class SaslClientHandler extends ChannelDuplexHandler {
    * @param userFirstPart  first part of username
    * @param userSecondPart second part of username
    * @return new SaslClient
-   * @throws IOException if fails
+   * @throws java.io.IOException if fails
    */
-  protected SaslClient createKerberosSaslClient(String[] mechanismNames,
-                                                String userFirstPart, String userSecondPart) throws IOException {
-    return Sasl.createSaslClient(mechanismNames, null, userFirstPart,
-        userSecondPart, SaslUtil.SASL_PROPS, null);
+  protected SaslClient createKerberosSaslClient(String[] mechanismNames, String userFirstPart,
+      String userSecondPart) throws IOException {
+    return Sasl
+        .createSaslClient(mechanismNames, null, userFirstPart, userSecondPart, SaslUtil.SASL_PROPS,
+            null);
   }
-
 
   @Override public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
     saslClient.dispose();
   }
 
-  @Override public void channelActive(ChannelHandlerContext ctx) throws Exception {
+  @Override public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
     this.saslToken = new byte[0];
     if (saslClient.hasInitialResponse()) {
       saslToken = saslClient.evaluateChallenge(saslToken);
     }
     if (saslToken != null) {
       writeSaslToken(ctx, saslToken);
-      if (LOG.isDebugEnabled())
-        LOG.debug("Have sent token of size " + saslToken.length
-            + " from initSASLContext.");
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Have sent token of size " + saslToken.length + " from initSASLContext.");
+      }
     }
   }
 
-  @Override
-  public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+  @Override public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
     ByteBuf in = (ByteBuf) msg;
 
     // If not complete, try to negotiate
     if (!saslClient.isComplete()) {
-      if (firstRead) {
-        firstRead = false;
-
+      while (!saslClient.isComplete() && in.isReadable()) {
         readStatus(in);
         int len = in.readInt();
-        if (len == SaslUtil.SWITCH_TO_SIMPLE_AUTH) {
-          if (!fallbackAllowed) {
-            throw new IOException("Server asks us to fall back to SIMPLE auth, " +
-                "but this client is configured to only allow secure connections.");
-          }
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("Server asks us to fall back to simple auth.");
-          }
-          saslClient.dispose();
+        if (firstRead) {
+          firstRead = false;
+          if (len == SaslUtil.SWITCH_TO_SIMPLE_AUTH) {
+            if (!fallbackAllowed) {
+              throw new IOException("Server asks us to fall back to SIMPLE auth, " + "but this "
+                  + "client is configured to only allow secure connections.");
+            }
+            if (LOG.isDebugEnabled()) {
+              LOG.debug("Server asks us to fall back to simple auth.");
+            }
+            saslClient.dispose();
 
-          ctx.pipeline().remove(this);
-          return;
+            ctx.pipeline().remove(this);
+            successfulConnectHandler.onSuccess(ctx.channel());
+            return;
+          }
         }
         saslToken = new byte[len];
         if (LOG.isDebugEnabled())
           LOG.debug("Will read input token of size " + saslToken.length
               + " for processing by initSASLContext");
         in.readBytes(saslToken);
-      }
 
-      while (!saslClient.isComplete() && in.isReadable()) {
         saslToken = saslClient.evaluateChallenge(saslToken);
         if (saslToken != null) {
           if (LOG.isDebugEnabled())
-            LOG.debug("Will send token of size " + saslToken.length
-                + " from initSASLContext.");
+            LOG.debug("Will send token of size " + saslToken.length + " from initSASLContext.");
           writeSaslToken(ctx, saslToken);
-        }
-        if (!saslClient.isComplete()) {
-          readStatus(in);
-          saslToken = new byte[in.readInt()];
-          if (LOG.isDebugEnabled())
-            LOG.debug("Will read input token of size " + saslToken.length
-                + " for processing by initSASLContext");
-          in.readBytes(saslToken);
         }
       }
 
@@ -223,6 +212,7 @@ public class SaslClientHandler extends ChannelDuplexHandler {
         if (!useWrap) {
           ctx.pipeline().remove(this);
         }
+        successfulConnectHandler.onSuccess(ctx.channel());
       }
     }
     // Normal wrapped reading
@@ -242,10 +232,12 @@ public class SaslClientHandler extends ChannelDuplexHandler {
 
         b.writeBytes(saslClient.unwrap(saslToken, 0, saslToken.length));
         ctx.fireChannelRead(b);
+
       } catch (SaslException se) {
         try {
           saslClient.dispose();
         } catch (SaslException ignored) {
+          LOG.debug("Ignoring SASL exception", ignored);
         }
         throw se;
       }
@@ -255,33 +247,38 @@ public class SaslClientHandler extends ChannelDuplexHandler {
   /**
    * Write SASL token
    *
-   * @param ctx       context to write to
+   * @param ctx       to write to
    * @param saslToken to write
    */
-  private void writeSaslToken(ChannelHandlerContext ctx, byte[] saslToken) {
-    ByteBuf b = ctx.channel().alloc().buffer(4 + saslToken.length);
+  private void writeSaslToken(final ChannelHandlerContext ctx, byte[] saslToken) {
+    ByteBuf b = ctx.alloc().buffer(4 + saslToken.length);
     b.writeInt(saslToken.length);
     b.writeBytes(saslToken, 0, saslToken.length);
-    ctx.channel().writeAndFlush(b);
+    ctx.writeAndFlush(b).addListener(new ChannelFutureListener() {
+      @Override public void operationComplete(ChannelFuture future) throws Exception {
+        if (!future.isSuccess()) {
+          exceptionCaught(ctx, future.cause());
+        }
+      }
+    });
   }
 
   /**
    * Get the read status
    *
    * @param inStream to read
-   * @throws RemoteException if status was not success
+   * @throws org.apache.hadoop.ipc.RemoteException if status was not success
    */
   private static void readStatus(ByteBuf inStream) throws RemoteException {
     int status = inStream.readInt(); // read status
     if (status != SaslStatus.SUCCESS.state) {
-      throw new RemoteException(
-          inStream.toString(Charset.forName("UTF-8")),
+      throw new RemoteException(inStream.toString(Charset.forName("UTF-8")),
           inStream.toString(Charset.forName("UTF-8")));
     }
   }
 
-  @Override
-  public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+  @Override public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause)
+      throws Exception {
     saslClient.dispose();
 
     ctx.close();
@@ -292,8 +289,8 @@ public class SaslClientHandler extends ChannelDuplexHandler {
     exceptionHandler.handle(this.retryCount++, this.random, cause);
   }
 
-  @Override
-  public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+  @Override public void write(final ChannelHandlerContext ctx, Object msg, ChannelPromise promise)
+      throws Exception {
     // If not complete, try to negotiate
     if (!saslClient.isComplete()) {
       super.write(ctx, msg, promise);
@@ -306,6 +303,7 @@ public class SaslClientHandler extends ChannelDuplexHandler {
         try {
           saslClient.dispose();
         } catch (SaslException ignored) {
+          LOG.debug("Ignoring SASL exception", ignored);
         }
         promise.setFailure(se);
       }
@@ -313,6 +311,14 @@ public class SaslClientHandler extends ChannelDuplexHandler {
         ByteBuf out = ctx.channel().alloc().buffer(4 + saslToken.length);
         out.writeInt(saslToken.length);
         out.writeBytes(saslToken, 0, saslToken.length);
+
+        ctx.write(out).addListener(new ChannelFutureListener() {
+          @Override public void operationComplete(ChannelFuture future) throws Exception {
+            if (!future.isSuccess()) {
+              exceptionCaught(ctx, future.cause());
+            }
+          }
+        });
 
         saslToken = null;
       }
@@ -331,5 +337,17 @@ public class SaslClientHandler extends ChannelDuplexHandler {
      * @param cause      of fail
      */
     public void handle(int retryCount, Random random, Throwable cause);
+  }
+
+  /**
+   * Handler for successful connects
+   */
+  public interface SaslSuccessfulConnectHandler {
+    /**
+     * Runs on success
+     *
+     * @param channel which is successfully authenticated
+     */
+    public void onSuccess(Channel channel);
   }
 }

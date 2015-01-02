@@ -17,8 +17,10 @@
  */
 package org.apache.hadoop.hbase.client;
 
+import mousio.hbase.async.HBaseClient;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.classification.InterfaceStability;
@@ -44,7 +46,7 @@ import java.util.LinkedList;
 public class AsyncClientScanner implements AsyncResultScanner {
   private final Log LOG = LogFactory.getLog(this.getClass());
 
-  final AsyncRpcClient client;
+  final HBaseClient client;
 
   protected Scan scan;
   protected boolean closed = false;
@@ -95,7 +97,7 @@ public class AsyncClientScanner implements AsyncResultScanner {
    * @param scan      {@link Scan} to use in this scanner
    * @param tableName The table that we wish to scan
    */
-  public AsyncClientScanner(final AsyncRpcClient client, final Scan scan, final TableName tableName) {
+  public AsyncClientScanner(final HBaseClient client, final Scan scan, final TableName tableName) {
     if (LOG.isTraceEnabled()) {
       LOG.trace("Scan table=" + tableName
           + ", startRow=" + Bytes.toStringBinary(scan.getStartRow()));
@@ -104,14 +106,16 @@ public class AsyncClientScanner implements AsyncResultScanner {
     this.tableName = tableName;
     this.lastNext = System.currentTimeMillis();
     this.client = client;
+
+    Configuration conf = client.getConnection().getConfiguration();
     if (scan.getMaxResultSize() > 0) {
       this.maxScannerResultSize = scan.getMaxResultSize();
     } else {
-      this.maxScannerResultSize = client.getConfiguration().getLong(
+      this.maxScannerResultSize = conf.getLong(
           HConstants.HBASE_CLIENT_SCANNER_MAX_RESULT_SIZE_KEY,
           HConstants.DEFAULT_HBASE_CLIENT_SCANNER_MAX_RESULT_SIZE);
     }
-    this.scannerTimeout = client.getConfiguration().getInt(
+    this.scannerTimeout = conf.getInt(
         HConstants.HBASE_CLIENT_SCANNER_TIMEOUT_PERIOD,
         HConstants.DEFAULT_HBASE_CLIENT_SCANNER_TIMEOUT_PERIOD);
 
@@ -122,15 +126,15 @@ public class AsyncClientScanner implements AsyncResultScanner {
     if (this.scan.getCaching() > 0) {
       this.caching = this.scan.getCaching();
     } else {
-      this.caching = client.getConfiguration().getInt(
+      this.caching = conf.getInt(
           HConstants.HBASE_CLIENT_SCANNER_CACHING,
           HConstants.DEFAULT_HBASE_CLIENT_SCANNER_CACHING);
     }
 
     this.caller = new AsyncRpcRetryingCaller<>(
-        client.getConfiguration().getLong(HConstants.HBASE_CLIENT_PAUSE,
+        conf.getLong(HConstants.HBASE_CLIENT_PAUSE,
             HConstants.DEFAULT_HBASE_CLIENT_PAUSE),
-        client.getConfiguration().getInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER,
+        conf.getInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER,
             HConstants.DEFAULT_HBASE_CLIENT_RETRIES_NUMBER)
     );
   }

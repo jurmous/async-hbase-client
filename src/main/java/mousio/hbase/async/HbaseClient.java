@@ -1,8 +1,11 @@
 package mousio.hbase.async;
 
 import com.google.protobuf.RpcCallback;
+import com.google.protobuf.RpcChannel;
 import com.google.protobuf.RpcController;
+import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionLocation;
+import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.filter.BinaryComparator;
@@ -14,6 +17,7 @@ import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
 import org.apache.hadoop.hbase.protobuf.RequestConverter;
 import org.apache.hadoop.hbase.protobuf.generated.ClientProtos;
 import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos;
+import org.apache.hadoop.hbase.security.User;
 import org.apache.hadoop.hbase.util.Bytes;
 
 import java.io.Closeable;
@@ -31,6 +35,7 @@ import static org.apache.hadoop.hbase.protobuf.RequestConverter.buildMutateReque
  */
 public class HBaseClient extends AbstractHBaseClient implements Closeable {
   private final AsyncRpcClient client;
+  private final int rpcTimeout;
 
   /**
    * Constructor
@@ -41,7 +46,10 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
   public HBaseClient(HConnection connection) throws IOException {
     super(connection);
 
-    this.client = new AsyncRpcClient(connection, this.clusterId, null);
+    this.rpcTimeout = connection.getConfiguration().getInt(HConstants.HBASE_RPC_TIMEOUT_KEY,
+        HConstants.DEFAULT_HBASE_RPC_TIMEOUT);
+
+    this.client = new AsyncRpcClient(connection.getConfiguration(), this.clusterId, null);
   }
 
   /**
@@ -54,10 +62,10 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
    */
   public <H extends ResponseHandler<Result>> H get(TableName table, Get get, final H handler) {
     try {
-      HRegionLocation location = this.client.getRegionLocation(table, get.getRow(), false);
+      HRegionLocation location = getRegionLocation(table, get.getRow(), false);
 
-      client.getClientService(location).get(
-          client.newRpcController(handler),
+      this.getClientService(location).get(
+          getNewRpcController(handler),
           buildGetRequest(
               location.getRegionInfo().getRegionName(),
               get
@@ -122,16 +130,16 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
   public AsyncResultScanner getScanner(TableName table, Scan scan) {
     if (scan.isReversed()) {
       if (scan.isSmall()) {
-        return new AsyncClientSmallReversedScanner(this.client, scan, table);
+        return new AsyncClientSmallReversedScanner(this, scan, table);
       } else {
-        return new AsyncReversedClientScanner(this.client, scan, table);
+        return new AsyncReversedClientScanner(this, scan, table);
       }
     }
 
     if (scan.isSmall()) {
-      return new AsyncClientSmallScanner(this.client, scan, table);
+      return new AsyncClientSmallScanner(this, scan, table);
     } else {
-      return new AsyncClientScanner(this.client, scan, table);
+      return new AsyncClientScanner(this, scan, table);
     }
   }
 
@@ -147,10 +155,10 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
 
   public <H extends ResponseHandler<Void>> H put(TableName table, Put put, final H handler) {
     try {
-      HRegionLocation location = this.client.getRegionLocation(table, put.getRow(), false);
+      HRegionLocation location = getRegionLocation(table, put.getRow(), false);
 
-      client.getClientService(location).mutate(
-          client.newRpcController(handler),
+      getClientService(location).mutate(
+          getNewRpcController(handler),
           buildMutateRequest(
               location.getRegionInfo().getRegionName(),
               put
@@ -199,7 +207,6 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
     return handler;
   }
 
-
   /**
    * Atomically checks if a row/family/qualifier value matches the expected
    * value. If it does, it adds the put.  If the passed value is null, the check
@@ -218,11 +225,10 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
   public <H extends ResponseHandler<Boolean>> H checkAndPut(TableName table, byte[] row, byte[] family, byte[] qualifier,
                                                             byte[] value, Put put, final H handler) {
     try {
-      HRegionLocation location = this.client.getRegionLocation(table, put.getRow(), false);
+      HRegionLocation location = getRegionLocation(table, put.getRow(), false);
 
-      client.getClientService(location).mutate(
-          client.newRpcController(handler),
-          buildMutateRequest(
+      getClientService(location).mutate(
+          getNewRpcController(handler), buildMutateRequest(
               location.getRegionInfo().getRegionName(),
               row,
               family,
@@ -254,25 +260,21 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
    */
   public <H extends ResponseHandler<Void>> H delete(TableName table, Delete delete, final H handler) {
     try {
-      HRegionLocation location = this.client.getRegionLocation(table, delete.getRow(), false);
+      HRegionLocation location = getRegionLocation(table, delete.getRow(), false);
 
-      client.getClientService(location).mutate(
-          client.newRpcController(handler),
-          buildMutateRequest(
-              location.getRegionInfo().getRegionName(),
-              delete
-          ),
+      getClientService(location).mutate(getNewRpcController(handler), buildMutateRequest(location.getRegionInfo().getRegionName(), delete),
           new RpcCallback<ClientProtos.MutateResponse>() {
-            @Override public void run(ClientProtos.MutateResponse response) {
+            @Override
+            public void run(ClientProtos.MutateResponse response) {
               handler.onSuccess(null);
             }
-          }
-      );
+          });
     } catch (IOException e) {
       handler.onFailure(e);
     }
     return handler;
   }
+
 
   /**
    * Deletes the specified cells/rows in bulk.
@@ -327,11 +329,10 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
   public <H extends ResponseHandler<Boolean>> H checkAndDelete(TableName table, byte[] row, byte[] family, byte[] qualifier,
                                                                byte[] value, Delete delete, final H handler) {
     try {
-      HRegionLocation location = this.client.getRegionLocation(table, delete.getRow(), false);
+      HRegionLocation location = getRegionLocation(table, delete.getRow(), false);
 
-      client.getClientService(location).mutate(
-          client.newRpcController(handler),
-          buildMutateRequest(
+      getClientService(location).mutate(
+          getNewRpcController(handler), buildMutateRequest(
               location.getRegionInfo().getRegionName(),
               row,
               family,
@@ -364,7 +365,7 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
    */
   public <H extends ResponseHandler<Void>> H mutateRow(TableName table, final RowMutations rm, final H handler) {
     try {
-      HRegionLocation location = this.client.getRegionLocation(table, rm.getRow(), false);
+      HRegionLocation location = getRegionLocation(table, rm.getRow(), false);
 
       ClientProtos.RegionAction.Builder regionMutationBuilder = RequestConverter.buildRegionAction(
           location.getRegionInfo().getRegionName(), rm);
@@ -373,15 +374,12 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
       ClientProtos.MultiRequest request =
           ClientProtos.MultiRequest.newBuilder().addRegionAction(regionMutationBuilder.build()).build();
 
-      client.getClientService(location).multi(
-          client.newRpcController(handler),
-          request,
-          new RpcCallback<ClientProtos.MultiResponse>() {
-            @Override public void run(ClientProtos.MultiResponse response) {
+      getClientService(location).multi(getNewRpcController(handler), request, new RpcCallback<ClientProtos.MultiResponse>() {
+            @Override
+            public void run(ClientProtos.MultiResponse response) {
               handler.onSuccess(null);
             }
-          }
-      );
+          });
     } catch (IOException e) {
       handler.onFailure(e);
     }
@@ -405,30 +403,25 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
    */
   public <H extends ResponseHandler<Result>> H append(TableName table, final Append append, final H handler) {
     try {
-      HRegionLocation location = this.client.getRegionLocation(table, append.getRow(), false);
+      HRegionLocation location = getRegionLocation(table, append.getRow(), false);
 
-      NonceGenerator ng = this.client.getNonceGenerator();
+      NonceGenerator ng = getConnection().getNonceGenerator();
       final long nonceGroup = ng.getNonceGroup(), nonce = ng.newNonce();
-      final AsyncPayloadCarryingRpcController controller = client.newRpcController(handler);
+      final AsyncPayloadCarryingRpcController controller = getNewRpcController(handler);
 
-      client.getClientService(location).mutate(
-          controller,
-          buildMutateRequest(
-              location.getRegionInfo().getRegionName(),
-              append,
-              nonceGroup,
-              nonce
-          ),
+      getClientService(location).mutate(controller,
+          buildMutateRequest(location.getRegionInfo().getRegionName(), append, nonceGroup, nonce),
           new RpcCallback<ClientProtos.MutateResponse>() {
-            @Override public void run(ClientProtos.MutateResponse response) {
+            @Override
+            public void run(ClientProtos.MutateResponse response) {
               try {
-                handler.onSuccess(ProtobufUtil.toResult(response.getResult(), controller.cellScanner()));
+                handler.onSuccess(
+                    ProtobufUtil.toResult(response.getResult(), controller.cellScanner()));
               } catch (IOException e) {
                 handler.onFailure(e);
               }
             }
-          }
-      );
+          });
     } catch (IOException e) {
       handler.onFailure(e);
     }
@@ -452,30 +445,25 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
    */
   public <H extends ResponseHandler<Result>> H increment(TableName table, final Increment increment, final H handler) {
     try {
-      HRegionLocation location = this.client.getRegionLocation(table, increment.getRow(), false);
+      HRegionLocation location = getRegionLocation(table, increment.getRow(), false);
 
-      NonceGenerator ng = this.client.getNonceGenerator();
+      NonceGenerator ng = getConnection().getNonceGenerator();
       final long nonceGroup = ng.getNonceGroup(), nonce = ng.newNonce();
-      final AsyncPayloadCarryingRpcController controller = client.newRpcController(handler);
+      final AsyncPayloadCarryingRpcController controller = getNewRpcController(handler);
 
-      client.getClientService(location).mutate(
-          controller,
-          buildMutateRequest(
-              location.getRegionInfo().getRegionName(),
-              increment,
-              nonceGroup,
-              nonce
-          ),
-          new RpcCallback<ClientProtos.MutateResponse>() {
-            @Override public void run(ClientProtos.MutateResponse response) {
+      getClientService(location).mutate(controller,
+          buildMutateRequest(location.getRegionInfo().getRegionName(), increment, nonceGroup,
+              nonce), new RpcCallback<ClientProtos.MutateResponse>() {
+            @Override
+            public void run(ClientProtos.MutateResponse response) {
               try {
-                handler.onSuccess(ProtobufUtil.toResult(response.getResult(), controller.cellScanner()));
+                handler.onSuccess(
+                    ProtobufUtil.toResult(response.getResult(), controller.cellScanner()));
               } catch (IOException e) {
                 handler.onFailure(e);
               }
             }
-          }
-      );
+          });
     } catch (IOException e) {
       handler.onFailure(e);
     }
@@ -537,18 +525,18 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
           "Invalid arguments to incrementColumnValue", npe));
     } else {
       try {
-        HRegionLocation location = this.client.getRegionLocation(table, row, false);
+        HRegionLocation location = getRegionLocation(table, row, false);
 
-        NonceGenerator ng = this.client.getNonceGenerator();
+        NonceGenerator ng = getConnection().getNonceGenerator();
         final long nonceGroup = ng.getNonceGroup(), nonce = ng.newNonce();
 
         ClientProtos.MutateRequest request = RequestConverter.buildIncrementRequest(
             location.getRegionInfo().getRegionName(), row, family,
             qualifier, amount, durability, nonceGroup, nonce);
 
-        final AsyncPayloadCarryingRpcController controller = client.newRpcController(handler);
+        final AsyncPayloadCarryingRpcController controller = getNewRpcController(handler);
 
-        client.getClientService(location).mutate(
+        getClientService(location).mutate(
             controller,
             request,
             new RpcCallback<ClientProtos.MutateResponse>() {
@@ -589,11 +577,10 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
   public <H extends ResponseHandler<Boolean>> H checkAndMutate(TableName table, byte[] row, byte[] family, byte[] qualifier, CompareFilter.CompareOp compareOp,
                                                                byte[] value, RowMutations mutation, final H handler) {
     try {
-      HRegionLocation location = this.client.getRegionLocation(table, mutation.getRow(), false);
+      HRegionLocation location = getRegionLocation(table, mutation.getRow(), false);
 
-      client.getClientService(location).multi(
-          client.newRpcController(handler),
-          buildMutateRequest(
+      getClientService(location).multi(
+          getNewRpcController(handler), buildMutateRequest(
               location.getRegionInfo().getRegionName(),
               row,
               family,
@@ -614,6 +601,16 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
     return handler;
   }
 
+  public ClientProtos.ClientService.Interface getClientService(HRegionLocation location) throws
+      IOException {
+    return ClientProtos.ClientService.newStub(
+        client.createRpcChannel(
+            location.getServerName(),
+            User.getCurrent(),
+            rpcTimeout)
+    );
+
+  }
 
   /**
    * Creates and returns a {@link com.google.protobuf.RpcChannel} instance connected to the
@@ -644,13 +641,10 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
    * @return A CoprocessorRpcChannel instance
    * @throws java.io.IOException when there was an error creating connection or getting location
    */
-  public AsyncRpcChannel coprocessorService(TableName table, byte[] row) throws IOException {
-    HRegionLocation location = this.client.getRegionLocation(table, row, false);
+  public RpcChannel coprocessorService(TableName table, byte[] row) throws IOException {
+    HRegionLocation location = getRegionLocation(table, row, false);
 
-    return client.getConnection(
-        ClientProtos.ClientService.getDescriptor(),
-        location
-    );
+    return client.createRpcChannel(location.getServerName(), User.getCurrent(), rpcTimeout);
   }
 
   /**
@@ -663,6 +657,7 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
     return new HBaseResponsePromise<>(client.getEventLoop());
   }
 
+
   @Override public void close() throws IOException {
     client.close();
   }
@@ -670,11 +665,19 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
   /**
    * Get a new Rpc controller
    *
-   * @param promise to handle result
+   * @param handler to handle result
    * @return new RpcController
    */
-  public RpcController newRpcController(ResponseHandler<?> promise) {
-    return this.client.newRpcController(promise);
+  public <H extends ResponseHandler<?>> AsyncPayloadCarryingRpcController getNewRpcController
+      (final H handler) {
+    AsyncPayloadCarryingRpcController controller = new AsyncPayloadCarryingRpcController();
+    controller.notifyOnFail(new RpcCallback<IOException>() {
+      @Override
+      public void run(IOException e) {
+        handler.onFailure(e);
+      }
+    });
+    return controller;
   }
 
   /**
@@ -683,8 +686,8 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
    * @param <R> Type of result listened to
    */
   private abstract class ResultListener<R> implements ResponseHandler<R> {
-    protected int index;
 
+    protected int index;
     /**
      * Constructor
      *
@@ -693,5 +696,19 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
     public ResultListener(int i) {
       this.index = i;
     }
+
+  }
+  
+  /**
+   * Get region location
+   * @param table to get location of
+   * @param row to get location of
+   * @param reload true to not use cached location
+   * @return HRegionLocation
+   * @throws IOException if location fetch fails
+   */
+  public HRegionLocation getRegionLocation(TableName table, byte[] row, boolean reload)
+      throws IOException {
+    return getConnection().getRegionLocation(table,row,reload);
   }
 }

@@ -1,18 +1,40 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.hadoop.hbase.ipc;
 
-import com.google.protobuf.RpcCallback;
-import com.google.protobuf.RpcController;
+import java.util.List;
+
 import org.apache.hadoop.hbase.CellScannable;
 import org.apache.hadoop.hbase.CellScanner;
+import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.TableName;
-
-import java.io.IOException;
+import org.apache.hadoop.hbase.classification.InterfaceAudience;
 
 /**
- * Netty Rpc controller
+ * Optionally carries Cells across the proxy/service interface down into ipc. On its
+ * way out it optionally carries a set of result Cell data.  We stick the Cells here when we want
+ * to avoid having to protobuf them.  This class is used ferrying data across the proxy/protobuf
+ * service chasm.  Used by client and server ipc'ing.
  */
-public class AsyncPayloadCarryingRpcController implements RpcController, CellScannable {
+@InterfaceAudience.Private
+public class AsyncPayloadCarryingRpcController
+    extends TimeLimitedRpcController implements CellScannable {
   /**
    * Priority to set on this request.  Set it here in controller so available composing the
    * request.  This is the ordained way of setting priorities going forward.  We will be
@@ -20,7 +42,7 @@ public class AsyncPayloadCarryingRpcController implements RpcController, CellSca
    */
   // Currently only multi call makes use of this.  Eventually this should be only way to set
   // priority.
-  private int priority = 0;
+  private int priority = HConstants.NORMAL_QOS;
 
   /**
    * They are optionally set on construction, cleared after we make the call, and then optionally
@@ -30,91 +52,32 @@ public class AsyncPayloadCarryingRpcController implements RpcController, CellSca
    */
   private CellScanner cellScanner;
 
-  private boolean cancelled = false;
-
-  private RpcCallback<IOException> exceptionCallback;
-  private IOException exception;
-
-  /**
-   * Constructor
-   */
   public AsyncPayloadCarryingRpcController() {
-    this(null);
+    this((CellScanner)null);
   }
 
-  /**
-   * Constructor
-   *
-   * @param cellScanner to init with
-   */
   public AsyncPayloadCarryingRpcController(final CellScanner cellScanner) {
     this.cellScanner = cellScanner;
   }
 
-  @Override public void reset() {
-    exception = null;
-    cancelled = false;
-    exceptionCallback = null;
-    priority = 0;
-    cellScanner = null;
-  }
-
-  @Override public boolean failed() {
-    return exception != null;
-  }
-
-  @Override public String errorText() {
-    return exception.getMessage();
-  }
-
-  @Override public void startCancel() {
-    this.cancelled = true;
-  }
-
-  @Override public void setFailed(String reason) {
-    this.exception = new IOException(reason);
-    if (this.exceptionCallback != null) {
-      this.exceptionCallback.run(this.exception);
-    }
-  }
-
-  @Override public boolean isCanceled() {
-    return cancelled;
-  }
-
-  @Override public void notifyOnCancel(RpcCallback<Object> callback) {
-    // Should only be implemented on the server according to interface
+  public AsyncPayloadCarryingRpcController(final List<CellScannable> cellIterables) {
+    this.cellScanner = cellIterables == null? null: CellUtil.createCellScanner(cellIterables);
   }
 
   /**
-   * Callback for errors
-   *
-   * @param callback to run on error
+   * @return One-shot cell scanner (you cannot back it up and restart)
    */
-  public void notifyOnError(RpcCallback<IOException> callback) {
-    if (this.exception != null) {
-      callback.run(this.exception);
-    } else {
-      this.exceptionCallback = callback;
-    }
-  }
-
-  @Override public CellScanner cellScanner() {
+  public CellScanner cellScanner() {
     return cellScanner;
   }
 
-  /**
-   * Set the cell scanner
-   *
-   * @param cellScanner cell scanner
-   */
-  public void setCellScanner(CellScanner cellScanner) {
+  public void setCellScanner(final CellScanner cellScanner) {
     this.cellScanner = cellScanner;
   }
 
   /**
    * @param priority Priority for this request; should fall roughly in the range
-   *                 {@link org.apache.hadoop.hbase.HConstants#NORMAL_QOS} to {@link org.apache.hadoop.hbase.HConstants#HIGH_QOS}
+   * {@link HConstants#NORMAL_QOS} to {@link HConstants#HIGH_QOS}
    */
   public void setPriority(int priority) {
     this.priority = priority;
@@ -124,7 +87,7 @@ public class AsyncPayloadCarryingRpcController implements RpcController, CellSca
    * @param tn Set priority based off the table we are going against.
    */
   public void setPriority(final TableName tn) {
-    this.priority = tn != null && tn.isSystemTable() ? HConstants.HIGH_QOS : HConstants.NORMAL_QOS;
+    this.priority = tn != null && tn.isSystemTable()? HConstants.HIGH_QOS: HConstants.NORMAL_QOS;
   }
 
   /**
@@ -134,15 +97,9 @@ public class AsyncPayloadCarryingRpcController implements RpcController, CellSca
     return priority;
   }
 
-  /**
-   * Set failed with an exception
-   *
-   * @param e exception to set with
-   */
-  public void setFailed(IOException e) {
-    this.exception = e;
-    if (this.exceptionCallback != null) {
-      this.exceptionCallback.run(this.exception);
-    }
+  @Override public void reset() {
+    super.reset();
+    priority = 0;
+    cellScanner = null;
   }
 }

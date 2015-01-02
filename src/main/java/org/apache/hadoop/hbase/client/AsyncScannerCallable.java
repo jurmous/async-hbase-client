@@ -20,6 +20,7 @@ package org.apache.hadoop.hbase.client;
 
 import com.google.protobuf.RpcCallback;
 import com.google.protobuf.TextFormat;
+import mousio.hbase.async.HBaseClient;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -79,12 +80,12 @@ public class AsyncScannerCallable extends AsyncRegionServerCallable<Result[]> {
    *                    metrics
    * @param controller  to use when writing the rpc
    */
-  public AsyncScannerCallable(AsyncRpcClient client, TableName tableName, Scan scan,
+  public AsyncScannerCallable(HBaseClient client, TableName tableName, Scan scan,
                               ScanMetrics scanMetrics, AsyncPayloadCarryingRpcController controller) {
     super(client, tableName, scan.getStartRow());
     this.scan = scan;
     this.scanMetrics = scanMetrics;
-    Configuration conf = client.getConfiguration();
+    Configuration conf = client.getConnection().getConfiguration();
     logScannerActivity = conf.getBoolean(ScannerCallable.LOG_SCANNER_ACTIVITY, false);
     logCutOffLatency = conf.getInt(ScannerCallable.LOG_SCANNER_LATENCY_CUTOFF, 1000);
     this.controller = controller;
@@ -148,11 +149,13 @@ public class AsyncScannerCallable extends AsyncRegionServerCallable<Result[]> {
         incRPCcallsMetrics();
         final ScanRequest request = RequestConverter.buildScanRequest(scannerId, maxResults, false, nextCallSeq);
         controller.setPriority(tableName);
-        controller.notifyOnError(new RpcCallback<IOException>() {
-          @Override public void run(IOException e) {
+        controller.notifyOnFail(new RpcCallback<IOException>() {
+          @Override
+          public void run(IOException e) {
             if (logScannerActivity) {
-              LOG.info("Got exception making request " + TextFormat.shortDebugString(request)
-                  + " to " + location, e);
+              LOG.info(
+                  "Got exception making request " + TextFormat.shortDebugString(request) + " to "
+                      + location, e);
             }
             if (e instanceof RemoteException) {
               try {
@@ -165,9 +168,10 @@ public class AsyncScannerCallable extends AsyncRegionServerCallable<Result[]> {
             if (logScannerActivity && (e instanceof UnknownScannerException)) {
               try {
                 HRegionLocation newLocation =
-                    client.getHConnection().relocateRegion(tableName, row);
-                LOG.info("Scanner=" + scannerId
-                    + " expired, current region location is " + newLocation.toString());
+                    client.getConnection().relocateRegion(tableName, row);
+                LOG.info(
+                    "Scanner=" + scannerId + " expired, current region location is " + newLocation
+                        .toString());
               } catch (Throwable t) {
                 LOG.info("Failed to relocate region", t);
               }
@@ -185,11 +189,13 @@ public class AsyncScannerCallable extends AsyncRegionServerCallable<Result[]> {
               if (scanMetrics != null) {
                 scanMetrics.countOfNSRE.incrementAndGet();
               }
-              handler.onFailure(new DoNotRetryIOException("Resetting the scanner -- see exception cause", e));
+              handler.onFailure(
+                  new DoNotRetryIOException("Resetting the scanner -- see exception cause", e));
             } else if (e instanceof RegionServerStoppedException) {
               // Throw a DNRE so that we break out of cycle of the retries and instead go and
               // open scanner against new location.
-              handler.onFailure(new DoNotRetryIOException("Resetting the scanner -- see exception cause", e));
+              handler.onFailure(
+                  new DoNotRetryIOException("Resetting the scanner -- see exception cause", e));
             } else {
               // The outer layers will retry
               handler.onFailure(e);
@@ -299,11 +305,13 @@ public class AsyncScannerCallable extends AsyncRegionServerCallable<Result[]> {
       }
     };
 
-    getStub().scan(client.newRpcController(handlerInternal), request, new RpcCallback<ScanResponse>() {
-      @Override public void run(ScanResponse parameter) {
-        handlerInternal.onSuccess(null);
-      }
-    });
+    getStub().scan(client.getNewRpcController(handlerInternal), request,
+        new RpcCallback<ScanResponse>() {
+          @Override
+          public void run(ScanResponse parameter) {
+            handlerInternal.onSuccess(null);
+          }
+        });
   }
 
   /**
@@ -315,8 +323,7 @@ public class AsyncScannerCallable extends AsyncRegionServerCallable<Result[]> {
     incRPCcallsMetrics();
     try {
       ScanRequest request = RequestConverter.buildScanRequest(
-          location.getRegionInfo().getRegionName(),
-          this.scan, 0, false);
+          location.getRegionInfo().getRegionName(), this.scan, 0, false);
       final ResponseHandler<ScanResponse> handler = new ResponseHandler<ClientProtos.ScanResponse>() {
         @Override public void onSuccess(ClientProtos.ScanResponse response) {
           long id = response.getScannerId();
@@ -332,7 +339,7 @@ public class AsyncScannerCallable extends AsyncRegionServerCallable<Result[]> {
         }
       };
 
-      getStub().scan(client.newRpcController(handler), request, new RpcCallback<ScanResponse>() {
+      getStub().scan(client.getNewRpcController(handler), request, new RpcCallback<ScanResponse>() {
         @Override public void run(ScanResponse response) {
           handler.onSuccess(response);
         }

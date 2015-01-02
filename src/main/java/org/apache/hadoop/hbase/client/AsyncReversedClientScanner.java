@@ -18,6 +18,7 @@
  */
 package org.apache.hadoop.hbase.client;
 
+import mousio.hbase.async.HBaseClient;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.HConstants;
@@ -52,7 +53,7 @@ public class AsyncReversedClientScanner extends AsyncClientScanner {
    * @param scan      {@link Scan} to use in this scanner
    * @param tableName The table that we wish to scan
    */
-  public AsyncReversedClientScanner(final AsyncRpcClient client, final Scan scan, final TableName tableName) {
+  public AsyncReversedClientScanner(final HBaseClient client, final Scan scan, final TableName tableName) {
     super(client, scan, tableName);
   }
 

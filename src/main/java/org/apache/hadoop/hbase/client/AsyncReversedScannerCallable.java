@@ -18,6 +18,7 @@
  */
 package org.apache.hadoop.hbase.client;
 
+import mousio.hbase.async.HBaseClient;
 import org.apache.hadoop.hbase.DoNotRetryIOException;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionLocation;
@@ -55,7 +56,7 @@ public class AsyncReversedScannerCallable extends AsyncScannerCallable {
    * @param locateStartRow start row to locate
    * @param controller     to use when writing the rpc
    */
-  public AsyncReversedScannerCallable(AsyncRpcClient client, TableName tableName, Scan scan,
+  public AsyncReversedScannerCallable(HBaseClient client, TableName tableName, Scan scan,
                                       ScanMetrics scanMetrics, byte[] locateStartRow, AsyncPayloadCarryingRpcController controller) {
     super(client, tableName, scan, scanMetrics, controller);
     this.locateStartRow = locateStartRow;
@@ -128,7 +129,7 @@ public class AsyncReversedScannerCallable extends AsyncScannerCallable {
     List<HRegionLocation> regionList = new ArrayList<>();
     byte[] currentKey = startKey;
     do {
-      HRegionLocation regionLocation = client.getHConnection().getRegionLocation(tableName,
+      HRegionLocation regionLocation = client.getConnection().getRegionLocation(tableName,
           currentKey, reload);
       if (regionLocation.getRegionInfo().containsRow(currentKey)) {
         regionList.add(regionLocation);

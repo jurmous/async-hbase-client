@@ -1,180 +1,213 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.hadoop.hbase.ipc;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.Descriptors;
+import com.google.protobuf.Message;
 import com.google.protobuf.RpcCallback;
+import com.google.protobuf.RpcChannel;
+import com.google.protobuf.RpcController;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
-import io.netty.channel.ChannelPipeline;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
-import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.concurrent.EventExecutor;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
+import io.netty.util.concurrent.Promise;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.HConstants;
-import org.apache.hadoop.hbase.HRegionLocation;
-import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.ServerName;
+import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.client.HConnection;
 import org.apache.hadoop.hbase.client.NonceGenerator;
-import org.apache.hadoop.hbase.client.ResponseHandler;
-import org.apache.hadoop.hbase.codec.Codec;
-import org.apache.hadoop.hbase.protobuf.generated.ClientProtos;
-import org.apache.hadoop.hbase.security.UserProvider;
+import org.apache.hadoop.hbase.security.User;
+import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.hbase.util.PoolMap;
-import org.apache.hadoop.io.compress.CompressionCodec;
+import org.apache.hadoop.hbase.util.Threads;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-
-import static org.apache.hadoop.hbase.ipc.RpcClient.getPingInterval;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Netty client for the requests and responses
  */
-public class AsyncRpcClient {
-  public static final Log LOG = LogFactory.getLog(AsyncRpcClient.class.getName());
+@InterfaceAudience.Private
+public class AsyncRpcClient extends AbstractRpcClient {
 
-  private final HConnection connection;
-  protected final Configuration configuration;
+  public static final HashedWheelTimer WHEEL_TIMER =
+      new HashedWheelTimer(100, TimeUnit.MILLISECONDS);
+
+  private static final ChannelInitializer<SocketChannel> DEFAULT_CHANNEL_INITIALIZER =
+      new ChannelInitializer<SocketChannel>() {
+        @Override
+        protected void initChannel(SocketChannel ch) throws Exception {
+          //empty initializer
+        }
+      };
+
+  protected final AtomicInteger callIdCnt = new AtomicInteger();
 
   private final NioEventLoopGroup eventLoopGroup;
   private final PoolMap<RpcClient.ConnectionId, AsyncRpcChannel> connections;
 
-  public final IPCUtil ipcUtil;
-
-  final UserProvider userProvider;
-  final String clusterId;
-
   final RpcClient.FailedServers failedServers;
 
   private final Bootstrap bootstrap;
-  public final Codec codec;
-  public final CompressionCodec compressor;
-  final boolean fallbackAllowed;
-
-  final int maxRetries;
-  final long failureSleep;
-  final int rpcTimeout;
-  final int maxIdleTime;
-
-  public static final HashedWheelTimer WHEEL_TIMER = new HashedWheelTimer(100, TimeUnit.MILLISECONDS);
 
   /**
-   * Constructor
+   * Constructor for tests
    *
-   * @param connection   to HBase
-   * @param clusterId    for the cluster
-   * @param localAddress local address to connect to
+   * @param configuration      to HBase
+   * @param clusterId          for the cluster
+   * @param localAddress       local address to connect to
+   * @param channelInitializer for custom channel handlers
    */
-  public AsyncRpcClient(HConnection connection, String clusterId, SocketAddress localAddress) {
-    LOG.info("Setting up Hbase Netty client");
-
-    this.connection = connection;
-
-    this.configuration = connection.getConfiguration();
-    this.ipcUtil = new IPCUtil(configuration);
-
-    this.codec = getCodec(configuration);
-    this.compressor = getCompressor(configuration);
-
-    this.clusterId = clusterId != null ? clusterId : HConstants.CLUSTER_ID_DEFAULT;
-
-    this.rpcTimeout = configuration.getInt(
-        HConstants.HBASE_RPC_TIMEOUT_KEY,
-        HConstants.DEFAULT_HBASE_RPC_TIMEOUT);
-
-    this.eventLoopGroup = new NioEventLoopGroup();
-
-    this.maxIdleTime = configuration.getInt("hbase.ipc.client.connection.maxidletime", 10000); //10s
-    this.maxRetries = configuration.getInt("hbase.ipc.client.connect.max.retries", 0);
-    this.failureSleep = configuration.getLong(HConstants.HBASE_CLIENT_PAUSE,
-        HConstants.DEFAULT_HBASE_CLIENT_PAUSE);
-
-    boolean tcpKeepAlive = configuration.getBoolean("hbase.ipc.client.tcpkeepalive", true);
-    boolean tcpNoDelay = configuration.getBoolean("hbase.ipc.client.tcpnodelay", true);
-
-    final int pingInterval = getPingInterval(configuration);
-
-    this.connections = new PoolMap<>(RpcClient.getPoolType(configuration), RpcClient.getPoolSize(configuration));
-    this.failedServers = new RpcClient.FailedServers(configuration);
-    this.fallbackAllowed = configuration.getBoolean(RpcClient.IPC_CLIENT_FALLBACK_TO_SIMPLE_AUTH_ALLOWED_KEY,
-        RpcClient.IPC_CLIENT_FALLBACK_TO_SIMPLE_AUTH_ALLOWED_DEFAULT);
-    this.userProvider = UserProvider.instantiate(configuration);
+  @VisibleForTesting
+  AsyncRpcClient(Configuration configuration, String clusterId, SocketAddress localAddress,
+      ChannelInitializer<SocketChannel> channelInitializer) {
+    super(configuration, clusterId, localAddress);
 
     if (LOG.isDebugEnabled()) {
-      LOG.debug("Codec=" + this.codec + ", compressor=" + this.compressor +
-          ", tcpKeepAlive=" + tcpKeepAlive +
-          ", tcpNoDelay=" + tcpNoDelay +
-          ", maxIdleTime=" + this.maxIdleTime +
-          ", maxRetries=" + this.maxRetries +
-          ", fallbackAllowed=" + this.fallbackAllowed +
-          ", bind address=" + (localAddress != null ? localAddress : "null"));
+      LOG.debug("Starting async Hbase RPC client");
     }
+
+    // Max amount of threads to use. 0 lets Netty decide based on amount of cores
+    int maxThreads = conf.getInt("hbase.rpc.client.threads.max", 0);
+
+    this.eventLoopGroup = new NioEventLoopGroup(maxThreads,
+        Threads.newDaemonThreadFactory("AsyncRpcChannel"));
+
+    this.connections = new PoolMap<>(getPoolType(configuration), getPoolSize(configuration));
+    this.failedServers = new RpcClient.FailedServers(configuration);
+
+    int operationTimeout = configuration.getInt(HConstants.HBASE_CLIENT_OPERATION_TIMEOUT,
+        HConstants.DEFAULT_HBASE_CLIENT_OPERATION_TIMEOUT);
 
     // Configure the default bootstrap.
     this.bootstrap = new Bootstrap();
-    bootstrap.group(eventLoopGroup)
-        .channel(NioSocketChannel.class)
+    bootstrap.group(eventLoopGroup).channel(NioSocketChannel.class)
         .option(ChannelOption.TCP_NODELAY, tcpNoDelay)
         .option(ChannelOption.SO_KEEPALIVE, tcpKeepAlive)
-        .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, configuration.getInt(HConstants.HBASE_CLIENT_OPERATION_TIMEOUT, HConstants.DEFAULT_HBASE_CLIENT_OPERATION_TIMEOUT))
-        .handler(new ChannelInitializer<SocketChannel>() {
-          @Override
-          public void initChannel(SocketChannel ch) throws Exception {
-            ChannelPipeline p = ch.pipeline();
-            p.addLast("idleStateHandler", new IdleStateHandler(pingInterval, maxIdleTime, 0));
-            p.addLast("frameDecoder", new LengthFieldBasedFrameDecoder(1048576, 0, 4, 0, 4));
-          }
-        });
-
+        .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, operationTimeout);
+    if (channelInitializer == null) {
+      channelInitializer = DEFAULT_CHANNEL_INITIALIZER;
+    }
+    bootstrap.handler(channelInitializer);
     if (localAddress != null) {
       bootstrap.localAddress(localAddress);
     }
   }
 
   /**
-   * Encapsulate the ugly casting and RuntimeException conversion in private method.
+   * Constructor
    *
-   * @param configuration to get codec with
-   * @return Codec to use on this client.
+   * @param configuration to HBase
+   * @param clusterId     for the cluster
+   * @param localAddress  local address to connect to
    */
-  Codec getCodec(Configuration configuration) {
-    // For NO CODEC, "hbase.client.rpc.codec" must be configured with empty string AND
-    // "hbase.client.default.rpc.codec" also -- because default is to do cell block encoding.
-    String className = configuration.get(HConstants.RPC_CODEC_CONF_KEY, RpcClient.getDefaultCodec(configuration));
-    if (className == null || className.isEmpty())
-      return null;
+  public AsyncRpcClient(Configuration configuration, String clusterId, SocketAddress localAddress) {
+    this(configuration, clusterId, localAddress, null);
+  }
+
+  /**
+   * Make a call, passing <code>param</code>, to the IPC server running at
+   * <code>address</code> which is servicing the <code>protocol</code> protocol,
+   * with the <code>ticket</code> credentials, returning the value.
+   * Throws exceptions if there are network problems or if the remote code
+   * threw an exception.
+   *
+   * @param ticket Be careful which ticket you pass. A new user will mean a new Connection.
+   *               {@link org.apache.hadoop.hbase.security.UserProvider#getCurrent()} makes a new
+   *               instance of User each time so will be a new Connection each time.
+   * @return A pair with the Message response and the Cell data (if any).
+   * @throws InterruptedException if call is interrupted
+   * @throws java.io.IOException  if a connection failure is encountered
+   */
+  @Override protected Pair<Message, CellScanner> call(AsyncPayloadCarryingRpcController pcrc,
+      Descriptors.MethodDescriptor md, Message param, Message returnType, User ticket,
+      InetSocketAddress addr) throws IOException, InterruptedException {
+
+    final AsyncRpcChannel connection = createRpcChannel(md.getService().getName(), addr, ticket);
+
+    Promise<Message> promise = connection.callMethodWithPromise(md, pcrc, param, returnType);
+
     try {
-      return (Codec) Class.forName(className).newInstance();
-    } catch (Exception e) {
-      throw new RuntimeException("Failed getting codec " + className, e);
+      Message response = promise.get();
+      return new Pair<>(response, pcrc.cellScanner());
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof IOException) {
+        throw (IOException) e.getCause();
+      } else {
+        throw new IOException(e.getCause());
+      }
     }
   }
 
-
   /**
-   * Encapsulate the ugly casting and RuntimeException conversion in private method.
-   *
-   * @param conf to use
-   * @return The compressor to use on this client.
+   * Call method async
    */
-  private static CompressionCodec getCompressor(final Configuration conf) {
-    String className = conf.get("hbase.client.rpc.compressor", null);
-    if (className == null || className.isEmpty())
-      return null;
+  private void callMethod(Descriptors.MethodDescriptor md, final AsyncPayloadCarryingRpcController pcrc,
+      Message param, Message returnType, User ticket, InetSocketAddress addr,
+      final RpcCallback<Message> done) {
+    final AsyncRpcChannel connection;
     try {
-      return (CompressionCodec) Class.forName(className).newInstance();
-    } catch (Exception e) {
-      throw new RuntimeException("Failed getting compressor " + className, e);
+      connection = createRpcChannel(md.getService().getName(), addr, ticket);
+
+      connection.callMethod(md, pcrc, param, returnType).addListener(
+          new GenericFutureListener<Future<Message>>() {
+            @Override
+            public void operationComplete(Future<Message> future) throws Exception {
+              if(!future.isSuccess()){
+                Throwable cause = future.cause();
+                if (cause instanceof IOException) {
+                  pcrc.setFailed((IOException) cause);
+                }else{
+                  pcrc.setFailed(new IOException(cause));
+                }
+              }else{
+                try {
+                  done.run(future.get());
+                }catch (ExecutionException e){
+                  Throwable cause = e.getCause();
+                  if (cause instanceof IOException) {
+                    pcrc.setFailed((IOException) cause);
+                  }else{
+                    pcrc.setFailed(new IOException(cause));
+                  }
+                }catch (InterruptedException e){
+                  pcrc.setFailed(new IOException(e));
+                }
+              }
+            }
+          });
+    } catch (StoppedRpcClientException|RpcClient.FailedServerException e) {
+      pcrc.setFailed(e);
     }
   }
 
@@ -183,33 +216,16 @@ public class AsyncRpcClient {
    */
   public void close() {
     if (LOG.isDebugEnabled()) {
-      LOG.debug("Stopping async rpc client");
+      LOG.debug("Stopping async HBase RPC client");
     }
 
     synchronized (connections) {
       for (AsyncRpcChannel conn : connections.values()) {
-        conn.close(new InterruptedException("Closing Async RPC client"));
+        conn.close(null);
       }
     }
 
     eventLoopGroup.shutdownGracefully();
-
-    // wait until all connections are closed
-    while (!connections.isEmpty()) {
-      try {
-        Thread.sleep(100);
-      } catch (InterruptedException ignored) {
-      }
-    }
-  }
-
-  /**
-   * Get an event loop
-   *
-   * @return event executor
-   */
-  public EventExecutor getEventLoop() {
-    return eventLoopGroup.next();
   }
 
   /**
@@ -217,7 +233,7 @@ public class AsyncRpcClient {
    *
    * @param cellBlock to create scanner for
    * @return CellScanner
-   * @throws IOException on error on creation cell scanner
+   * @throws java.io.IOException on error on creation cell scanner
    */
   public CellScanner createCellScanner(byte[] cellBlock) throws IOException {
     return ipcUtil.createCellScanner(this.codec, this.compressor, cellBlock);
@@ -228,12 +244,51 @@ public class AsyncRpcClient {
    *
    * @param cells to create block with
    * @return ByteBuffer with cells
-   * @throws IOException if block creation fails
+   * @throws java.io.IOException if block creation fails
    */
   public ByteBuffer buildCellBlock(CellScanner cells) throws IOException {
     return ipcUtil.buildCellBlock(this.codec, this.compressor, cells);
   }
 
+  /**
+   * Creates an RPC client
+   *
+   * @param serviceName    name of servicce
+   * @param location       to connect to
+   * @param ticket         for current user
+   * @return new RpcChannel
+   * @throws StoppedRpcClientException when Rpc client is stopped
+   * @throws RpcClient.FailedServerException if server failed
+   */
+  private AsyncRpcChannel createRpcChannel(String serviceName, InetSocketAddress location,
+      User ticket) throws StoppedRpcClientException, RpcClient.FailedServerException {
+    if (this.eventLoopGroup.isShuttingDown() || this.eventLoopGroup.isShutdown()) {
+      throw new StoppedRpcClientException();
+    }
+
+    // Check if server is failed
+    if (this.failedServers.isFailedServer(location)) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Not trying to connect to " + location +
+            " this server is in the failed servers list");
+      }
+      throw new RpcClient.FailedServerException(
+          "This server is in the failed servers list: " + location);
+    }
+
+    RpcClient.ConnectionId id = new RpcClient.ConnectionId(ticket,serviceName,location,0);
+
+    AsyncRpcChannel rpcChannel;
+    synchronized (connections) {
+      rpcChannel = connections.get(id);
+      if (rpcChannel == null) {
+        rpcChannel = new AsyncRpcChannel(this.bootstrap, this, id);
+        connections.put(id, rpcChannel);
+      }
+    }
+
+    return rpcChannel;
+  }
 
   /**
    * Interrupt the connections to the given ip:port server. This should be called if the server
@@ -243,138 +298,92 @@ public class AsyncRpcClient {
    * process died) or no route to host: i.e. there next retries should be faster and with a
    * safe exception.
    *
-   * @param hostname to cancel connections for
-   * @param port     to cancel connection for
-   * @param ioe      exception which canceled connection
+   * @param sn server to cancel connections for
    */
-  public void cancelConnections(String hostname, int port, IOException ioe) {
+  public void cancelConnections(ServerName sn) {
     synchronized (connections) {
       for (AsyncRpcChannel rpcChannel : connections.values()) {
         if (rpcChannel.isAlive() &&
-            rpcChannel.remoteId.address.getPort() == port &&
-            rpcChannel.remoteId.address.getHostName().equals(hostname)) {
-          LOG.info("The server on " + hostname + ":" + port +
-              " is dead - stopping the connection " + rpcChannel.remoteId);
-          rpcChannel.close(ioe);
+            rpcChannel.address.getPort() == sn.getPort() &&
+            rpcChannel.address.getHostName().contentEquals(sn.getHostname())) {
+          LOG.info("The server on " + sn.toString() +
+              " is dead - stopping the connection " + rpcChannel.toString());
+          rpcChannel.close(null);
         }
       }
     }
   }
 
   /**
-   * Get a connection from the pool, or create a new one and add it to the
-   * pool.  Connections to a given host/port are reused.
-   *
-   * @param serviceDescriptor to get connection for
-   * @param location          to connect to
-   * @return Fitting NettyRpcChannel
-   * @throws IOException if connecting fails
-   */
-  public AsyncRpcChannel getConnection(Descriptors.ServiceDescriptor serviceDescriptor, HRegionLocation location)
-      throws IOException {
-    if (this.eventLoopGroup.isShuttingDown() || this.eventLoopGroup.isShutdown()) {
-      throw new StoppedRpcClientException();
-    }
-    AsyncRpcChannel rpcChannel;
-    RpcClient.ConnectionId remoteId =
-        new RpcClient.ConnectionId(
-            this.userProvider.getCurrent(),
-            serviceDescriptor.getName(),
-            new InetSocketAddress(location.getHostname(), location.getPort()),
-            this.rpcTimeout);
-    synchronized (connections) {
-      rpcChannel = connections.get(remoteId);
-      if (rpcChannel == null) {
-        rpcChannel = new AsyncRpcChannel(
-            this.bootstrap,
-            this,
-            remoteId);
-        connections.put(remoteId, rpcChannel);
-      }
-    }
-
-    return rpcChannel;
-  }
-
-  /**
    * Remove connection from pool
    *
-   * @param remoteId of connection
+   * @param connectionId of connection
    */
-  public void removeConnection(RpcClient.ConnectionId remoteId) {
-    this.connections.remove(remoteId);
+  public void removeConnection(RpcClient.ConnectionId connectionId) {
+    synchronized (connections) {
+      this.connections.remove(connectionId);
+    }
   }
 
   /**
-   * Get hbase configuration
+   * Creates a "channel" that can be used by a protobuf service.  Useful setting up
+   * protobuf stubs.
    *
-   * @return configuration
+   * @param sn server name describing location of server
+   * @param user which is to use the connection
+   * @param rpcTimeout default rpc operation timeout
+   *
+   * @return A rpc channel that goes via this rpc client instance.
+   * @throws IOException when channel could not be created
    */
-  public Configuration getConfiguration() {
-    return configuration;
+  public RpcChannel createRpcChannel(final ServerName sn, final User user, int rpcTimeout) {
+    return new RpcChannelImplementation(this, sn, user, rpcTimeout);
   }
 
   /**
-   * Get region location
-   *
-   * @param table  to get location of
-   * @param row    to get location of
-   * @param reload true to force reloading the location and not to use the cache.
-   * @return Region location
-   * @throws java.io.IOException if connection fetching fails
+   * Get netty event loop
+   * @return event loop
    */
-  public HRegionLocation getRegionLocation(TableName table, byte[] row, boolean reload) throws IOException {
-    return this.connection.getRegionLocation(table, row, reload);
+  public EventExecutor getEventLoop() {
+    return eventLoopGroup.next();
   }
 
   /**
-   * Get nonce generator
-   *
-   * @return nonce generator
+   * Blocking rpc channel that goes via hbase rpc.
    */
-  public NonceGenerator getNonceGenerator() {
-    return connection.getNonceGenerator();
-  }
+  @VisibleForTesting
+  public static class RpcChannelImplementation implements RpcChannel {
+    private final InetSocketAddress isa;
+    private final AsyncRpcClient rpcClient;
+    private final User ticket;
+    private final int channelOperationTimeout;
 
-  /**
-   * Return an new RPC controller
-   *
-   * @param handler for controller to run on errors
-   * @param <T>     Type of Result returned
-   * @return new RpcController
-   */
-  public <T> AsyncPayloadCarryingRpcController newRpcController(final ResponseHandler<T> handler) {
-    AsyncPayloadCarryingRpcController controller = new AsyncPayloadCarryingRpcController();
-    controller.notifyOnError(new RpcCallback<IOException>() {
-      @Override public void run(IOException e) {
-        handler.onFailure(e);
+    /**
+     * @param channelOperationTimeout - the default timeout when no timeout is given
+     */
+    protected RpcChannelImplementation(final AsyncRpcClient rpcClient,
+        final ServerName sn, final User ticket, int channelOperationTimeout) {
+      this.isa = new InetSocketAddress(sn.getHostname(), sn.getPort());
+      this.rpcClient = rpcClient;
+      this.ticket = ticket;
+      this.channelOperationTimeout = channelOperationTimeout;
+    }
+
+    @Override
+    public void callMethod(Descriptors.MethodDescriptor md, RpcController controller,
+        Message param, Message returnType, RpcCallback<Message> done) {
+      AsyncPayloadCarryingRpcController pcrc;
+      if (controller != null) {
+        pcrc = (AsyncPayloadCarryingRpcController) controller;
+        if (!pcrc.hasCallTimeout()) {
+          pcrc.setCallTimeout(channelOperationTimeout);
+        }
+      } else {
+        pcrc = new AsyncPayloadCarryingRpcController();
+        pcrc.setCallTimeout(channelOperationTimeout);
       }
-    });
-    return controller;
-  }
 
-  /**
-   * Get the client service
-   *
-   * @param location to get service of
-   * @return Service
-   * @throws IOException if service creation fails
-   */
-  public ClientProtos.ClientService.Interface getClientService(HRegionLocation location) throws IOException {
-    return ClientProtos.ClientService.newStub(
-        getConnection(
-            ClientProtos.ClientService.getDescriptor(),
-            location
-        )
-    );
-  }
-
-  /**
-   * Get the HConnection
-   *
-   * @return the HConnection
-   */
-  public HConnection getHConnection() {
-    return this.connection;
+      this.rpcClient.callMethod(md, pcrc, param, returnType, this.ticket, this.isa, done);
+    }
   }
 }

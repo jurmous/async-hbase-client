@@ -19,6 +19,7 @@
 package org.apache.hadoop.hbase.client;
 
 import com.google.protobuf.RpcCallback;
+import mousio.hbase.async.HBaseClient;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.HConstants;
@@ -60,7 +61,7 @@ public class AsyncClientSmallScanner extends AsyncClientScanner {
    * @param scan      {@link Scan} to use in this scanner
    * @param tableName The table that we wish to scan
    */
-  public AsyncClientSmallScanner(final AsyncRpcClient client, final Scan scan, final TableName tableName) {
+  public AsyncClientSmallScanner(final HBaseClient client, final Scan scan, final TableName tableName) {
     super(client, scan, tableName);
   }
 
@@ -128,7 +129,7 @@ public class AsyncClientSmallScanner extends AsyncClientScanner {
    * @throws IOException if callable creation fails
    */
   static AsyncRegionServerCallable<Result[]> getSmallScanCallable(
-      final Scan scan, AsyncRpcClient client, TableName table, byte[] localStartKey,
+      final Scan scan, HBaseClient client, TableName table, byte[] localStartKey,
       final int cacheNum) throws IOException {
     scan.setStartRow(localStartKey);
     return new AsyncRegionServerCallable<Result[]>(
@@ -145,8 +146,9 @@ public class AsyncClientSmallScanner extends AsyncClientScanner {
 
         final AsyncPayloadCarryingRpcController controller = new AsyncPayloadCarryingRpcController();
         controller.setPriority(getTableName());
-        controller.notifyOnError(new RpcCallback<IOException>() {
-          @Override public void run(IOException error) {
+        controller.notifyOnFail(new RpcCallback<IOException>() {
+          @Override
+          public void run(IOException error) {
             handler.onFailure(error);
           }
         });

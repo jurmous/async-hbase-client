@@ -20,6 +20,7 @@
 package org.apache.hadoop.hbase.client;
 
 
+import mousio.hbase.async.HBaseClient;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.HConstants;
@@ -54,7 +55,7 @@ public class AsyncClientSmallReversedScanner extends AsyncReversedClientScanner 
    * @param scan      {@link Scan} to use in this scanner
    * @param tableName The table that we wish to scan
    */
-  public AsyncClientSmallReversedScanner(final AsyncRpcClient client, final Scan scan, final TableName tableName) {
+  public AsyncClientSmallReversedScanner(final HBaseClient client, final Scan scan, final TableName tableName) {
     super(client, scan, tableName);
   }
 
@@ -105,8 +106,8 @@ public class AsyncClientSmallReversedScanner extends AsyncReversedClientScanner 
           + Bytes.toStringBinary(localStartKey) + "'");
     }
 
-    smallScanCallable = AsyncClientSmallScanner.getSmallScanCallable(
-        scan, client, getTable(), localStartKey, cacheNum);
+    smallScanCallable = AsyncClientSmallScanner.getSmallScanCallable(scan, client, getTable(),
+        localStartKey, cacheNum);
 
     if (this.scanMetrics != null && skipRowOfFirstResult == null) {
       this.scanMetrics.countOfRegions.incrementAndGet();

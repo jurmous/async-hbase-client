@@ -19,6 +19,7 @@
 
 package org.apache.hadoop.hbase.client;
 
+import mousio.hbase.async.HBaseClient;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.HRegionInfo;
@@ -48,7 +49,7 @@ public abstract class AsyncRegionServerCallable<T> implements AsyncRetryingCalla
   protected final HConnection connection;
   protected final TableName tableName;
   protected final byte[] row;
-  protected final AsyncRpcClient client;
+  protected final HBaseClient client;
   protected HRegionLocation location;
   private ClientService.Interface stub;
 
@@ -59,8 +60,8 @@ public abstract class AsyncRegionServerCallable<T> implements AsyncRetryingCalla
    * @param tableName Table name to which <code>row</code> belongs.
    * @param row       The row we want in <code>tableName</code>.
    */
-  public AsyncRegionServerCallable(AsyncRpcClient client, TableName tableName, byte[] row) {
-    this.connection = client.getHConnection();
+  public AsyncRegionServerCallable(HBaseClient client, TableName tableName, byte[] row) {
+    this.connection = client.getConnection();
     this.client = client;
     this.tableName = tableName;
     this.row = row;
