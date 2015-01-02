@@ -111,12 +111,10 @@ public class AsyncClientScanner implements AsyncResultScanner {
     if (scan.getMaxResultSize() > 0) {
       this.maxScannerResultSize = scan.getMaxResultSize();
     } else {
-      this.maxScannerResultSize = conf.getLong(
-          HConstants.HBASE_CLIENT_SCANNER_MAX_RESULT_SIZE_KEY,
+      this.maxScannerResultSize = conf.getLong(HConstants.HBASE_CLIENT_SCANNER_MAX_RESULT_SIZE_KEY,
           HConstants.DEFAULT_HBASE_CLIENT_SCANNER_MAX_RESULT_SIZE);
     }
-    this.scannerTimeout = conf.getInt(
-        HConstants.HBASE_CLIENT_SCANNER_TIMEOUT_PERIOD,
+    this.scannerTimeout = conf.getInt(HConstants.HBASE_CLIENT_SCANNER_TIMEOUT_PERIOD,
         HConstants.DEFAULT_HBASE_CLIENT_SCANNER_TIMEOUT_PERIOD);
 
     // check if application wants to collect scan metrics
@@ -126,14 +124,12 @@ public class AsyncClientScanner implements AsyncResultScanner {
     if (this.scan.getCaching() > 0) {
       this.caching = this.scan.getCaching();
     } else {
-      this.caching = conf.getInt(
-          HConstants.HBASE_CLIENT_SCANNER_CACHING,
+      this.caching = conf.getInt(HConstants.HBASE_CLIENT_SCANNER_CACHING,
           HConstants.DEFAULT_HBASE_CLIENT_SCANNER_CACHING);
     }
 
     this.caller = new AsyncRpcRetryingCaller<>(
-        conf.getLong(HConstants.HBASE_CLIENT_PAUSE,
-            HConstants.DEFAULT_HBASE_CLIENT_PAUSE),
+        conf.getLong(HConstants.HBASE_CLIENT_PAUSE, HConstants.DEFAULT_HBASE_CLIENT_PAUSE),
         conf.getInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER,
             HConstants.DEFAULT_HBASE_CLIENT_RETRIES_NUMBER)
     );

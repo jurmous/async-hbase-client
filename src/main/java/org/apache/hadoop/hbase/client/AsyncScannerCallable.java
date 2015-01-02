@@ -28,7 +28,6 @@ import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.client.metrics.ScanMetrics;
 import org.apache.hadoop.hbase.ipc.AsyncPayloadCarryingRpcController;
-import org.apache.hadoop.hbase.ipc.AsyncRpcClient;
 import org.apache.hadoop.hbase.protobuf.RequestConverter;
 import org.apache.hadoop.hbase.protobuf.ResponseConverter;
 import org.apache.hadoop.hbase.protobuf.generated.ClientProtos;
@@ -167,8 +166,7 @@ public class AsyncScannerCallable extends AsyncRegionServerCallable<Result[]> {
             }
             if (logScannerActivity && (e instanceof UnknownScannerException)) {
               try {
-                HRegionLocation newLocation =
-                    client.getConnection().relocateRegion(tableName, row);
+                HRegionLocation newLocation = client.getConnection().relocateRegion(tableName, row);
                 LOG.info(
                     "Scanner=" + scannerId + " expired, current region location is " + newLocation
                         .toString());
