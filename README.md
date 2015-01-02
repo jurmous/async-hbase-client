@@ -15,13 +15,13 @@ enables more types of async RPC calls than HBase enables which is currently most
 <dependency>
   <groupId>org.mousio</groupId>
   <artifactId>async-hbase-client</artifactId>
-  <version>0.8.0</version>
+  <version>0.9.0</version>
 </dependency>
 ```
 
 ## Gradle
 ```
-compile 'org.mousio:async-hbase-client:0.8.0'
+compile 'org.mousio:async-hbase-client:0.9.0'
 ```
 
 ## Manually
@@ -34,8 +34,8 @@ able to communicate with different versions of HBase using the version "0" api.
 
 # Current status
 
-This project is new and not yet battle tested in all areas. It is based on the HBase client
-so it should do all the same things but bugs could still be present. Please report issues and they will be fixed.
+The client is currently tested against all HBase internal Rpc client tests and a lot of bugs has
+been hammered out. If you still find issues please report them.
 
 Supported:
 * Table based calls
@@ -51,9 +51,8 @@ Supported:
   * Coprocessor on single row
 
 Implemented but needs to be checked:
-* Security. Simple/Kerberos. It is based on the HBase implementation but refactored to work in a Netty Stack.
-* Scans spanning multiple regions. It is based on the HBase implementation but refactored to be Async.
-* Call failover. It is based on the HBase implementation but refactored to be Async.
+* Kerberos Security. It is based on the HBase implementation but refactored to work in a
+Netty Stack.
 
 Not yet implemented:
 * Coprocessor over multiple rows/regions. Please provide an example since I am currently not using one yet.
