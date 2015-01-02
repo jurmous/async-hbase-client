@@ -26,7 +26,7 @@ import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.classification.InterfaceStability;
 import org.apache.hadoop.hbase.client.metrics.ScanMetrics;
-import org.apache.hadoop.hbase.ipc.AsyncPayloadCarryingRpcController;
+import org.apache.hadoop.hbase.ipc.PayloadCarryingRpcController;
 import org.apache.hadoop.hbase.util.Bytes;
 
 import java.io.IOException;
@@ -56,7 +56,8 @@ public class AsyncReversedScannerCallable extends AsyncScannerCallable {
    * @param controller     to use when writing the rpc
    */
   public AsyncReversedScannerCallable(HBaseClient client, TableName tableName, Scan scan,
-                                      ScanMetrics scanMetrics, byte[] locateStartRow, AsyncPayloadCarryingRpcController controller) {
+                                      ScanMetrics scanMetrics, byte[] locateStartRow,
+      PayloadCarryingRpcController controller) {
     super(client, tableName, scan, scanMetrics, controller);
     this.locateStartRow = locateStartRow;
   }
@@ -70,7 +71,7 @@ public class AsyncReversedScannerCallable extends AsyncScannerCallable {
     if (!instantiated || reload) {
       if (locateStartRow == null) {
         // Just locate the region with the row
-        this.location = client.getRegionLocation(tableName, row, reload);
+        this.location = connection.getRegionLocation(tableName, row, reload);
         if (this.location == null) {
           throw new IOException("Failed to find location, tableName="
               + tableName + ", row=" + Bytes.toStringBinary(row) + ", reload="
@@ -128,8 +129,8 @@ public class AsyncReversedScannerCallable extends AsyncScannerCallable {
     List<HRegionLocation> regionList = new ArrayList<>();
     byte[] currentKey = startKey;
     do {
-      HRegionLocation regionLocation = client.getConnection().getRegionLocation(tableName,
-          currentKey, reload);
+      HRegionLocation regionLocation = client.getConnection().getRegionLocator(tableName)
+          .getRegionLocation(currentKey, reload);
       if (regionLocation.getRegionInfo().containsRow(currentKey)) {
         regionList.add(regionLocation);
       } else {

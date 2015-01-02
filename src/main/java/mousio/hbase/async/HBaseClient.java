@@ -8,8 +8,9 @@ import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.filter.BinaryComparator;
 import org.apache.hadoop.hbase.filter.CompareFilter;
-import org.apache.hadoop.hbase.ipc.AsyncPayloadCarryingRpcController;
 import org.apache.hadoop.hbase.ipc.AsyncRpcClient;
+import org.apache.hadoop.hbase.ipc.PayloadCarryingRpcController;
+import org.apache.hadoop.hbase.ipc.RpcClientFactory;
 import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
 import org.apache.hadoop.hbase.protobuf.RequestConverter;
 import org.apache.hadoop.hbase.protobuf.generated.ClientProtos;
@@ -40,13 +41,32 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
    * @param connection to Hbase
    * @throws java.io.IOException if HConnection could not be set up
    */
-  public HBaseClient(HConnection connection) throws IOException {
-    super(connection);
+  public HBaseClient(Connection connection) throws IOException {
+    super((ClusterConnection) connection);
 
     this.rpcTimeout = connection.getConfiguration().getInt(HConstants.HBASE_RPC_TIMEOUT_KEY,
         HConstants.DEFAULT_HBASE_RPC_TIMEOUT);
 
-    this.client = new AsyncRpcClient(connection.getConfiguration(), this.clusterId, null);
+    String rpcClassName =
+        connection.getConfiguration().get(RpcClientFactory.CUSTOM_RPC_CLIENT_IMPL_CONF_KEY);
+    if (rpcClassName == null || !rpcClassName.contentEquals(AsyncRpcClient.class.getName())) {
+      throw new IOException(
+          "The RpcClient implementation for this class needs to be AsyncRpcClient its class. "
+              + "Set it with key \"" + RpcClientFactory.CUSTOM_RPC_CLIENT_IMPL_CONF_KEY
+              + "\" in the HBase configuration");
+    }
+
+    String connectionImplClass =
+        connection.getConfiguration().get(HConnection.HBASE_CLIENT_CONNECTION_IMPL);
+    if (connectionImplClass == null || !connectionImplClass
+        .contentEquals(AsyncConnectionImpl.class.getName())) {
+      throw new IOException(
+          "The Connection implementation for this class needs to be AsyncConnectionImpl its class. "
+              + "Set it with key " + HConnection.HBASE_CLIENT_CONNECTION_IMPL
+              + " in the HBase configuration");
+    }
+
+    this.client = (AsyncRpcClient) ((AsyncConnectionImpl) connection).getRpcClient();
   }
 
   /**
@@ -369,9 +389,11 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
 
       regionMutationBuilder.setAtomic(true);
       ClientProtos.MultiRequest request =
-          ClientProtos.MultiRequest.newBuilder().addRegionAction(regionMutationBuilder.build()).build();
+          ClientProtos.MultiRequest.newBuilder().addRegionAction(regionMutationBuilder.build())
+              .build();
 
-      getClientService(location).multi(getNewRpcController(handler), request, new RpcCallback<ClientProtos.MultiResponse>() {
+      getClientService(location).multi(getNewRpcController(handler), request,
+          new RpcCallback<ClientProtos.MultiResponse>() {
             @Override
             public void run(ClientProtos.MultiResponse response) {
               handler.onSuccess(null);
@@ -402,9 +424,9 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
     try {
       HRegionLocation location = getRegionLocation(table, append.getRow(), false);
 
-      NonceGenerator ng = getConnection().getNonceGenerator();
+      NonceGenerator ng = connection.getNonceGenerator();
       final long nonceGroup = ng.getNonceGroup(), nonce = ng.newNonce();
-      final AsyncPayloadCarryingRpcController controller = getNewRpcController(handler);
+      final PayloadCarryingRpcController controller = getNewRpcController(handler);
 
       getClientService(location).mutate(controller,
           buildMutateRequest(location.getRegionInfo().getRegionName(), append, nonceGroup, nonce),
@@ -444,9 +466,9 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
     try {
       HRegionLocation location = getRegionLocation(table, increment.getRow(), false);
 
-      NonceGenerator ng = getConnection().getNonceGenerator();
+      NonceGenerator ng = connection.getNonceGenerator();
       final long nonceGroup = ng.getNonceGroup(), nonce = ng.newNonce();
-      final AsyncPayloadCarryingRpcController controller = getNewRpcController(handler);
+      final PayloadCarryingRpcController controller = getNewRpcController(handler);
 
       getClientService(location).mutate(controller,
           buildMutateRequest(location.getRegionInfo().getRegionName(), increment, nonceGroup,
@@ -524,14 +546,14 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
       try {
         HRegionLocation location = getRegionLocation(table, row, false);
 
-        NonceGenerator ng = getConnection().getNonceGenerator();
+        NonceGenerator ng = connection.getNonceGenerator();
         final long nonceGroup = ng.getNonceGroup(), nonce = ng.newNonce();
 
         ClientProtos.MutateRequest request = RequestConverter.buildIncrementRequest(
             location.getRegionInfo().getRegionName(), row, family,
             qualifier, amount, durability, nonceGroup, nonce);
 
-        final AsyncPayloadCarryingRpcController controller = getNewRpcController(handler);
+        final PayloadCarryingRpcController controller = getNewRpcController(handler);
 
         getClientService(location).mutate(
             controller,
@@ -598,6 +620,12 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
     return handler;
   }
 
+  /**
+   * Get the client service
+   * @param location of service
+   * @return the new service
+   * @throws IOException if creation fails
+   */
   public ClientProtos.ClientService.Interface getClientService(HRegionLocation location) throws
       IOException {
     return ClientProtos.ClientService.newStub(
@@ -665,9 +693,9 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
    * @param handler to handle result
    * @return new RpcController
    */
-  public <H extends ResponseHandler<?>> AsyncPayloadCarryingRpcController getNewRpcController
+  public <H extends ResponseHandler<?>> PayloadCarryingRpcController getNewRpcController
       (final H handler) {
-    AsyncPayloadCarryingRpcController controller = new AsyncPayloadCarryingRpcController();
+    PayloadCarryingRpcController controller = new PayloadCarryingRpcController();
     controller.notifyOnFail(new RpcCallback<IOException>() {
       @Override
       public void run(IOException e) {
@@ -706,6 +734,6 @@ public class HBaseClient extends AbstractHBaseClient implements Closeable {
    */
   public HRegionLocation getRegionLocation(TableName table, byte[] row, boolean reload)
       throws IOException {
-    return getConnection().getRegionLocation(table,row,reload);
+    return connection.getRegionLocation(table, row, reload);
   }
 }

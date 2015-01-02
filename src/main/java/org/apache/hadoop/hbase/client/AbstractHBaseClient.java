@@ -5,16 +5,16 @@ package org.apache.hadoop.hbase.client;
  */
 public abstract class AbstractHBaseClient {
   protected final String clusterId;
-  private final HConnection connection;
+  protected final ClusterConnection connection;
 
   /**
    * Constructor
    *
    * @param connection to use for connection
    */
-  public AbstractHBaseClient(HConnection connection) {
+  public AbstractHBaseClient(ClusterConnection connection) {
     this.connection = connection;
-    this.clusterId = ((HConnectionManager.HConnectionImplementation) connection).clusterId;
+    this.clusterId = ((ConnectionManager.HConnectionImplementation) connection).clusterId;
   }
 
   /**
@@ -22,7 +22,7 @@ public abstract class AbstractHBaseClient {
    *
    * @return HConnection
    */
-  public HConnection getConnection() {
+  public Connection getConnection() {
     return connection;
   }
 }

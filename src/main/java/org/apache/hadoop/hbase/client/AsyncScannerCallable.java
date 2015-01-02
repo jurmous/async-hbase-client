@@ -27,7 +27,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.client.metrics.ScanMetrics;
-import org.apache.hadoop.hbase.ipc.AsyncPayloadCarryingRpcController;
+import org.apache.hadoop.hbase.ipc.PayloadCarryingRpcController;
 import org.apache.hadoop.hbase.protobuf.RequestConverter;
 import org.apache.hadoop.hbase.protobuf.ResponseConverter;
 import org.apache.hadoop.hbase.protobuf.generated.ClientProtos;
@@ -69,7 +69,7 @@ public class AsyncScannerCallable extends AsyncRegionServerCallable<Result[]> {
   // indicate if it is a remote server call
   protected boolean isRegionServerRemote = true;
   private long nextCallSeq = 0;
-  protected final AsyncPayloadCarryingRpcController controller;
+  protected final PayloadCarryingRpcController controller;
 
   /**
    * @param client      to connect with
@@ -80,7 +80,7 @@ public class AsyncScannerCallable extends AsyncRegionServerCallable<Result[]> {
    * @param controller  to use when writing the rpc
    */
   public AsyncScannerCallable(HBaseClient client, TableName tableName, Scan scan,
-                              ScanMetrics scanMetrics, AsyncPayloadCarryingRpcController controller) {
+                              ScanMetrics scanMetrics, PayloadCarryingRpcController controller) {
     super(client, tableName, scan.getStartRow());
     this.scan = scan;
     this.scanMetrics = scanMetrics;
@@ -157,16 +157,11 @@ public class AsyncScannerCallable extends AsyncRegionServerCallable<Result[]> {
                       + location, e);
             }
             if (e instanceof RemoteException) {
-              try {
-                e = RemoteExceptionHandler.decodeRemoteException((RemoteException) e);
-              } catch (IOException e1) {
-                handler.onFailure(e1);
-                return;
-              }
+                e = ((RemoteException) e).unwrapRemoteException();
             }
             if (logScannerActivity && (e instanceof UnknownScannerException)) {
               try {
-                HRegionLocation newLocation = client.getConnection().relocateRegion(tableName, row);
+                HRegionLocation newLocation = client.connection.relocateRegion(tableName, row);
                 LOG.info(
                     "Scanner=" + scannerId + " expired, current region location is " + newLocation
                         .toString());
@@ -270,7 +265,7 @@ public class AsyncScannerCallable extends AsyncRegionServerCallable<Result[]> {
     long resultSize = 0;
     for (Result rr : rrs) {
       for (Cell kv : rr.rawCells()) {
-        resultSize += CellUtil.estimatedSizeOf(kv);
+        resultSize += CellUtil.estimatedSerializedSizeOf(kv);
       }
     }
     this.scanMetrics.countOfBytesInResults.addAndGet(resultSize);

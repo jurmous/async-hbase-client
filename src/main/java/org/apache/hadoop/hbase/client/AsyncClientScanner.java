@@ -26,7 +26,7 @@ import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.classification.InterfaceStability;
 import org.apache.hadoop.hbase.client.metrics.ScanMetrics;
 import org.apache.hadoop.hbase.exceptions.OutOfOrderScannerNextException;
-import org.apache.hadoop.hbase.ipc.AsyncPayloadCarryingRpcController;
+import org.apache.hadoop.hbase.ipc.PayloadCarryingRpcController;
 import org.apache.hadoop.hbase.ipc.AsyncRpcClient;
 import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
 import org.apache.hadoop.hbase.protobuf.generated.MapReduceProtos;
@@ -280,7 +280,7 @@ public class AsyncClientScanner implements AsyncResultScanner {
                                                     int nbRows) {
     scan.setStartRow(localStartKey);
     AsyncScannerCallable s = new AsyncScannerCallable(this.client,
-        getTable(), scan, this.scanMetrics, new AsyncPayloadCarryingRpcController());
+        getTable(), scan, this.scanMetrics, new PayloadCarryingRpcController());
     s.setMaxResults(nbRows);
     return s;
   }

@@ -25,8 +25,8 @@ import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.classification.InterfaceStability;
-import org.apache.hadoop.hbase.ipc.AsyncPayloadCarryingRpcController;
 import org.apache.hadoop.hbase.ipc.AsyncRpcClient;
+import org.apache.hadoop.hbase.ipc.PayloadCarryingRpcController;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ExceptionUtil;
 
@@ -142,7 +142,7 @@ public class AsyncReversedClientScanner extends AsyncClientScanner {
     scan.setStartRow(localStartKey);
     AsyncScannerCallable s =
         new AsyncReversedScannerCallable(client, getTable(), scan, this.scanMetrics,
-            locateStartRow, new AsyncPayloadCarryingRpcController());
+            locateStartRow, new PayloadCarryingRpcController());
     s.setMaxResults(nbRows);
     return s;
   }

@@ -52,8 +52,8 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
 import org.apache.hadoop.security.token.TokenSelector;
-import org.cloudera.htrace.Span;
-import org.cloudera.htrace.Trace;
+import org.htrace.Span;
+import org.htrace.Trace;
 
 import javax.security.sasl.SaslException;
 import java.io.IOException;
@@ -86,7 +86,7 @@ public class AsyncRpcChannel {
   }
 
   final AsyncRpcClient client;
-  private final RpcClient.ConnectionId connectionId;
+  private final ConnectionId connectionId;
 
   // Contains the channel to work with.
   // Only exists when connected
@@ -127,7 +127,7 @@ public class AsyncRpcChannel {
    * @param client    to connect with
    * @param connectionId of connection
    */
-  public AsyncRpcChannel(Bootstrap bootstrap, final AsyncRpcClient client, RpcClient.ConnectionId
+  public AsyncRpcChannel(Bootstrap bootstrap, final AsyncRpcClient client, ConnectionId
    connectionId) {
     this.client = client;
 
@@ -292,7 +292,7 @@ public class AsyncRpcChannel {
    * @param responsePrototype to construct response with
    */
   public Promise<Message> callMethod(final Descriptors.MethodDescriptor method,
-      final AsyncPayloadCarryingRpcController controller, final Message request,
+      final PayloadCarryingRpcController controller, final Message request,
       final Message responsePrototype) {
     if (shouldCloseConnection) {
       Promise<Message> promise = channel.eventLoop().newPromise();
@@ -335,7 +335,7 @@ public class AsyncRpcChannel {
    * @throws java.net.ConnectException on connection failures
    */
   public Promise<Message> callMethodWithPromise(
-      final Descriptors.MethodDescriptor method, final AsyncPayloadCarryingRpcController controller,
+      final Descriptors.MethodDescriptor method, final PayloadCarryingRpcController controller,
       final Message request, final Message responsePrototype) throws ConnectException {
     if (shouldCloseConnection || !channel.isOpen()) {
       throw new ConnectException();
@@ -603,13 +603,13 @@ public class AsyncRpcChannel {
       }
     } else {
       for (AsyncCall call : calls.values()) {
-        long waitTime = EnvironmentEdgeManager.currentTimeMillis() - call.getStartTime();
+        long waitTime = EnvironmentEdgeManager.currentTime() - call.getStartTime();
         long timeout = call.getRpcTimeout();
         if (timeout > 0 && waitTime >= timeout) {
           synchronized (call) {
             // Calls can be done on another thread so check before failing them
             if (!call.isDone()) {
-              closeException = new RpcClient.CallTimeoutException("Call id=" + call.id +
+              closeException = new CallTimeoutException("Call id=" + call.id +
                   ", waitTime=" + waitTime + ", rpcTimeout=" + timeout);
               failCall(call, closeException);
             }
@@ -626,7 +626,7 @@ public class AsyncRpcChannel {
         AsyncCall firstCall = calls.firstEntry().getValue();
 
         final long newTimeout;
-        long maxWaitTime = EnvironmentEdgeManager.currentTimeMillis() - firstCall.getStartTime();
+        long maxWaitTime = EnvironmentEdgeManager.currentTime() - firstCall.getStartTime();
         if (maxWaitTime < firstCall.getRpcTimeout()) {
           newTimeout = firstCall.getRpcTimeout() - maxWaitTime;
         } else {

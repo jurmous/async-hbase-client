@@ -96,7 +96,7 @@ public class AsyncRpcRetryingCaller<T> {
       (value = "SWL_SLEEP_WITH_LOCK_HELD", justification = "na")
   public synchronized void callWithRetries(final AsyncRetryingCallable<T> callable, int callTimeout, final ResponseHandler<T> handler) {
     this.callTimeout = callTimeout;
-    this.globalStartTime = EnvironmentEdgeManager.currentTimeMillis();
+    this.globalStartTime = EnvironmentEdgeManager.currentTime();
 
     try {
       callable.prepare(true); // if called with false, check table status on ZK
@@ -112,7 +112,7 @@ public class AsyncRpcRetryingCaller<T> {
    * @return Calculate how long a single call took
    */
   private long singleCallDuration(final long expectedSleep) {
-    return (EnvironmentEdgeManager.currentTimeMillis() - this.globalStartTime)
+    return (EnvironmentEdgeManager.currentTime() - this.globalStartTime)
         + MIN_RPC_TIMEOUT + expectedSleep;
   }
 
@@ -128,7 +128,7 @@ public class AsyncRpcRetryingCaller<T> {
    */
   public void callWithoutRetries(AsyncRetryingCallable<T> callable, int callTimeout, final ResponseHandler<T> handler) {
     // The code of this method should be shared with withRetries.
-    this.globalStartTime = EnvironmentEdgeManager.currentTimeMillis();
+    this.globalStartTime = EnvironmentEdgeManager.currentTime();
     this.callTimeout = callTimeout;
     try {
       callable.prepare(true); // if called with false, check table status on ZK
@@ -225,14 +225,14 @@ public class AsyncRpcRetryingCaller<T> {
       try {
         if (LOG.isTraceEnabled()) {
           LOG.trace("Call exception, tries=" + tries + ", retries=" + retries + ", retryTime=" +
-              (EnvironmentEdgeManager.currentTimeMillis() - globalStartTime) + "ms", e);
+              (EnvironmentEdgeManager.currentTime() - globalStartTime) + "ms", e);
         }
         // translateException throws exception when should not retry: i.e. when request is bad.
         Throwable t = translateException(e);
         callable.throwable(t, retries != 1);
         RetriesExhaustedException.ThrowableWithExtraContext qt =
             new RetriesExhaustedException.ThrowableWithExtraContext(t,
-                EnvironmentEdgeManager.currentTimeMillis(), toString());
+                EnvironmentEdgeManager.currentTime(), toString());
         exceptions.add(qt);
         ExceptionUtil.rethrowIfInterrupt(t);
         if (tries >= retries - 1) {

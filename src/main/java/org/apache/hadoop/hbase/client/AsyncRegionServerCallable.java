@@ -45,7 +45,7 @@ import java.net.SocketTimeoutException;
 public abstract class AsyncRegionServerCallable<T> implements AsyncRetryingCallable<T> {
   // Public because used outside of this package over in ipc.
   static final Log LOG = LogFactory.getLog(AsyncRegionServerCallable.class);
-  protected final HConnection connection;
+  protected final ClusterConnection connection;
   protected final TableName tableName;
   protected final byte[] row;
   protected final HBaseClient client;
@@ -60,7 +60,7 @@ public abstract class AsyncRegionServerCallable<T> implements AsyncRetryingCalla
    * @param row       The row we want in <code>tableName</code>.
    */
   public AsyncRegionServerCallable(HBaseClient client, TableName tableName, byte[] row) {
-    this.connection = client.getConnection();
+    this.connection = (ClusterConnection) client.getConnection();
     this.client = client;
     this.tableName = tableName;
     this.row = row;
@@ -74,7 +74,8 @@ public abstract class AsyncRegionServerCallable<T> implements AsyncRetryingCalla
    * @throws IOException e
    */
   public void prepare(final boolean reload) throws IOException {
-    this.location = connection.getRegionLocation(tableName, row, reload);
+    this.location = connection.getRegionLocator(tableName)
+        .getRegionLocation(row, reload);
     if (this.location == null) {
       throw new IOException("Failed to find location, tableName=" + tableName +
           ", row=" + Bytes.toString(row) + ", reload=" + reload);
@@ -85,7 +86,7 @@ public abstract class AsyncRegionServerCallable<T> implements AsyncRetryingCalla
   /**
    * @return {@link HConnection} instance used by this Callable.
    */
-  HConnection getConnection() {
+  ClusterConnection getConnection() {
     return this.connection;
   }
 
@@ -118,18 +119,18 @@ public abstract class AsyncRegionServerCallable<T> implements AsyncRetryingCalla
     if (t instanceof SocketTimeoutException ||
         t instanceof ConnectException ||
         t instanceof RetriesExhaustedException ||
-        (location != null && getConnection().isDeadServer(location.getServerName()))) {
+        (location != null && connection.isDeadServer(location.getServerName()))) {
       // if thrown these exceptions, we clear all the cache entries that
       // map to that slow/dead server; otherwise, let cache miss and ask
       // hbase:meta again to find the new location
       if (this.location != null)
-        getConnection().clearCaches(location.getServerName());
+        connection.clearCaches(location.getServerName());
     } else if (t instanceof RegionMovedException) {
-      getConnection().updateCachedLocations(tableName, row, t, location);
+      connection.updateCachedLocations(tableName, row, t, location);
     } else if (t instanceof NotServingRegionException && !retrying) {
       // Purge cache entries for this specific region from hbase:meta cache
       // since we don't call connect(true) when number of retries is 1.
-      getConnection().deleteCachedRegionLocation(location);
+      connection.deleteCachedRegionLocation(location);
     }
   }
 
@@ -143,7 +144,7 @@ public abstract class AsyncRegionServerCallable<T> implements AsyncRetryingCalla
     // Tries hasn't been bumped up yet so we use "tries + 1" to get right pause time
     long sleep = ConnectionUtils.getPauseTime(pause, tries + 1);
     if (sleep < MIN_WAIT_DEAD_SERVER
-        && (location == null || getConnection().isDeadServer(location.getServerName()))) {
+        && (location == null || connection.isDeadServer(location.getServerName()))) {
       sleep = ConnectionUtils.addJitter(MIN_WAIT_DEAD_SERVER, 0.10f);
     }
     return sleep;

@@ -23,6 +23,8 @@ import com.google.protobuf.RpcCallback;
 import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.filter.CompareFilter;
+import org.apache.hadoop.hbase.ipc.AsyncRpcClient;
+import org.apache.hadoop.hbase.ipc.RpcClientFactory;
 import org.apache.hadoop.hbase.protobuf.generated.ClientProtos;
 import org.apache.hadoop.hbase.testclassification.MediumTests;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -44,17 +46,22 @@ public class HBaseClientTest {
   private static final HBaseTestingUtility util = new HBaseTestingUtility();
   private static final byte[] DEFAULT_FAMILY = "f".getBytes();
   private static HBaseClient client;
-  private static HConnection connection;
+  private static Connection connection;
 
   @BeforeClass
   public static void setupBeforeClass() throws Exception {
+    util.getConfiguration()
+        .set(RpcClientFactory.CUSTOM_RPC_CLIENT_IMPL_CONF_KEY, AsyncRpcClient.class.getName());
+    util.getConfiguration()
+        .set(HConnection.HBASE_CLIENT_CONNECTION_IMPL, AsyncConnectionImpl.class.getName());
+
     util.startMiniCluster();
     util.getMiniHBaseCluster();
 
     HTableDescriptor desc = new HTableDescriptor(TEST_TABLE);
     util.createTable(desc, new byte[][]{DEFAULT_FAMILY}, util.getConfiguration());
 
-    connection = HConnectionManager.createConnection(util.getConfiguration());
+    connection = ConnectionFactory.createConnection(util.getConfiguration());
     client = new HBaseClient(connection);
   }
 
@@ -256,12 +263,12 @@ public class HBaseClientTest {
     byte[] row = new byte[]{10};
 
     client.put(TEST_TABLE,
-        new Put(row).add(DEFAULT_FAMILY, new byte[]{1}, new byte[]{2}),
+        new Put(row).add(DEFAULT_FAMILY, new byte[] { 1 }, new byte[] { 2 }),
         client.<Void>newPromise()).get();
 
     RowMutations mutations = new RowMutations(row);
     mutations.add(new Put(row).add(DEFAULT_FAMILY, new byte[]{2}, new byte[]{2}));
-    mutations.add(new Delete(row).deleteColumn(DEFAULT_FAMILY, new byte[]{1}));
+    mutations.add(new Delete(row).addColumn(DEFAULT_FAMILY, new byte[]{1}));
 
     client.mutateRow(TEST_TABLE, mutations, client.<Void>newPromise()).get();
 
@@ -281,12 +288,12 @@ public class HBaseClientTest {
     byte[] row = new byte[]{11};
 
     client.put(TEST_TABLE,
-        new Put(row).add(DEFAULT_FAMILY, new byte[]{1}, new byte[]{2}),
+        new Put(row).add(DEFAULT_FAMILY, new byte[] { 1 }, new byte[] { 2 }),
         client.<Void>newPromise()).get();
 
     RowMutations mutations = new RowMutations(row);
     mutations.add(new Put(row).add(DEFAULT_FAMILY, new byte[]{2}, new byte[]{2}));
-    mutations.add(new Delete(row).deleteColumn(DEFAULT_FAMILY, new byte[]{1}));
+    mutations.add(new Delete(row).addColumn(DEFAULT_FAMILY, new byte[]{1}));
 
     boolean checked = client.checkAndMutate(
         TEST_TABLE, row, DEFAULT_FAMILY, new byte[]{1},
@@ -310,7 +317,8 @@ public class HBaseClientTest {
     ClientProtos.ClientService.newStub(client.coprocessorService(TEST_TABLE, row)).get(
         client.getNewRpcController(promise),
         buildGetRequest(
-            connection.getRegionLocation(TEST_TABLE, row, false).getRegionInfo().getRegionName(),
+            connection.getRegionLocator(TEST_TABLE).getRegionLocation(row, false)
+                .getRegionInfo().getRegionName(),
             new Get(row)
         ),
         new RpcCallback<ClientProtos.GetResponse>() {

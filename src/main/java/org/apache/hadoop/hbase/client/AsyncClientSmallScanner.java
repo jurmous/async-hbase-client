@@ -26,7 +26,7 @@ import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.classification.InterfaceStability;
-import org.apache.hadoop.hbase.ipc.AsyncPayloadCarryingRpcController;
+import org.apache.hadoop.hbase.ipc.PayloadCarryingRpcController;
 import org.apache.hadoop.hbase.protobuf.RequestConverter;
 import org.apache.hadoop.hbase.protobuf.ResponseConverter;
 import org.apache.hadoop.hbase.protobuf.generated.ClientProtos.ScanRequest;
@@ -143,7 +143,7 @@ public class AsyncClientSmallScanner extends AsyncClientScanner {
           return;
         }
 
-        final AsyncPayloadCarryingRpcController controller = new AsyncPayloadCarryingRpcController();
+        final PayloadCarryingRpcController controller = new PayloadCarryingRpcController();
         controller.setPriority(getTableName());
         controller.notifyOnFail(new RpcCallback<IOException>() {
           @Override

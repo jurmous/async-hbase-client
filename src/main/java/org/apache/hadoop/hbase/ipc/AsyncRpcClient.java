@@ -39,8 +39,6 @@ import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
-import org.apache.hadoop.hbase.client.HConnection;
-import org.apache.hadoop.hbase.client.NonceGenerator;
 import org.apache.hadoop.hbase.security.User;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.hbase.util.PoolMap;
@@ -74,9 +72,9 @@ public class AsyncRpcClient extends AbstractRpcClient {
   protected final AtomicInteger callIdCnt = new AtomicInteger();
 
   private final NioEventLoopGroup eventLoopGroup;
-  private final PoolMap<RpcClient.ConnectionId, AsyncRpcChannel> connections;
+  private final PoolMap<ConnectionId, AsyncRpcChannel> connections;
 
-  final RpcClient.FailedServers failedServers;
+  final FailedServers failedServers;
 
   private final Bootstrap bootstrap;
 
@@ -104,7 +102,7 @@ public class AsyncRpcClient extends AbstractRpcClient {
         Threads.newDaemonThreadFactory("AsyncRpcChannel"));
 
     this.connections = new PoolMap<>(getPoolType(configuration), getPoolSize(configuration));
-    this.failedServers = new RpcClient.FailedServers(configuration);
+    this.failedServers = new FailedServers(configuration);
 
     int operationTimeout = configuration.getInt(HConstants.HBASE_CLIENT_OPERATION_TIMEOUT,
         HConstants.DEFAULT_HBASE_CLIENT_OPERATION_TIMEOUT);
@@ -149,9 +147,9 @@ public class AsyncRpcClient extends AbstractRpcClient {
    * @throws InterruptedException if call is interrupted
    * @throws java.io.IOException  if a connection failure is encountered
    */
-  @Override protected Pair<Message, CellScanner> call(AsyncPayloadCarryingRpcController pcrc,
-      Descriptors.MethodDescriptor md, Message param, Message returnType, User ticket,
-      InetSocketAddress addr) throws IOException, InterruptedException {
+  @Override protected Pair<Message, CellScanner> call(PayloadCarryingRpcController pcrc,
+      Descriptors.MethodDescriptor md, Message param, CellScanner cells, Message returnType, User ticket,
+      InetSocketAddress addr, int callTimeout, int priority) throws IOException, InterruptedException {
 
     final AsyncRpcChannel connection = createRpcChannel(md.getService().getName(), addr, ticket);
 
@@ -172,7 +170,7 @@ public class AsyncRpcClient extends AbstractRpcClient {
   /**
    * Call method async
    */
-  private void callMethod(Descriptors.MethodDescriptor md, final AsyncPayloadCarryingRpcController pcrc,
+  private void callMethod(Descriptors.MethodDescriptor md, final PayloadCarryingRpcController pcrc,
       Message param, Message returnType, User ticket, InetSocketAddress addr,
       final RpcCallback<Message> done) {
     final AsyncRpcChannel connection;
@@ -206,7 +204,7 @@ public class AsyncRpcClient extends AbstractRpcClient {
               }
             }
           });
-    } catch (StoppedRpcClientException|RpcClient.FailedServerException e) {
+    } catch (StoppedRpcClientException|FailedServerException e) {
       pcrc.setFailed(e);
     }
   }
@@ -258,10 +256,10 @@ public class AsyncRpcClient extends AbstractRpcClient {
    * @param ticket         for current user
    * @return new RpcChannel
    * @throws StoppedRpcClientException when Rpc client is stopped
-   * @throws RpcClient.FailedServerException if server failed
+   * @throws FailedServerException if server failed
    */
   private AsyncRpcChannel createRpcChannel(String serviceName, InetSocketAddress location,
-      User ticket) throws StoppedRpcClientException, RpcClient.FailedServerException {
+      User ticket) throws StoppedRpcClientException, FailedServerException {
     if (this.eventLoopGroup.isShuttingDown() || this.eventLoopGroup.isShutdown()) {
       throw new StoppedRpcClientException();
     }
@@ -272,11 +270,11 @@ public class AsyncRpcClient extends AbstractRpcClient {
         LOG.debug("Not trying to connect to " + location +
             " this server is in the failed servers list");
       }
-      throw new RpcClient.FailedServerException(
+      throw new FailedServerException(
           "This server is in the failed servers list: " + location);
     }
 
-    RpcClient.ConnectionId id = new RpcClient.ConnectionId(ticket,serviceName,location,0);
+    ConnectionId id = new ConnectionId(ticket,serviceName,location);
 
     AsyncRpcChannel rpcChannel;
     synchronized (connections) {
@@ -319,7 +317,7 @@ public class AsyncRpcClient extends AbstractRpcClient {
    *
    * @param connectionId of connection
    */
-  public void removeConnection(RpcClient.ConnectionId connectionId) {
+  public void removeConnection(ConnectionId connectionId) {
     synchronized (connections) {
       this.connections.remove(connectionId);
     }
@@ -372,14 +370,14 @@ public class AsyncRpcClient extends AbstractRpcClient {
     @Override
     public void callMethod(Descriptors.MethodDescriptor md, RpcController controller,
         Message param, Message returnType, RpcCallback<Message> done) {
-      AsyncPayloadCarryingRpcController pcrc;
+      PayloadCarryingRpcController pcrc;
       if (controller != null) {
-        pcrc = (AsyncPayloadCarryingRpcController) controller;
+        pcrc = (PayloadCarryingRpcController) controller;
         if (!pcrc.hasCallTimeout()) {
           pcrc.setCallTimeout(channelOperationTimeout);
         }
       } else {
-        pcrc = new AsyncPayloadCarryingRpcController();
+        pcrc = new PayloadCarryingRpcController();
         pcrc.setCallTimeout(channelOperationTimeout);
       }
 

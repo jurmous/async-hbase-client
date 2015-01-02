@@ -45,7 +45,7 @@ public class AsyncCall extends DefaultPromise<Message> {
 
   final Descriptors.MethodDescriptor method;
   final Message param;
-  final AsyncPayloadCarryingRpcController controller;
+  final PayloadCarryingRpcController controller;
   final Message responseDefaultType;
   final long startTime;
   final long rpcTimeout;
@@ -61,7 +61,7 @@ public class AsyncCall extends DefaultPromise<Message> {
    * @param responseDefaultType the default response type
    */
   public AsyncCall(EventLoop eventLoop, int connectId, Descriptors.MethodDescriptor md, Message
-      param, AsyncPayloadCarryingRpcController controller, Message responseDefaultType) {
+      param, PayloadCarryingRpcController controller, Message responseDefaultType) {
     super(eventLoop);
 
     this.id = connectId;
@@ -71,7 +71,7 @@ public class AsyncCall extends DefaultPromise<Message> {
     this.controller = controller;
     this.responseDefaultType = responseDefaultType;
 
-    this.startTime = EnvironmentEdgeManager.currentTimeMillis();
+    this.startTime = EnvironmentEdgeManager.currentTime();
     this.rpcTimeout = controller.getCallTimeout();
   }
 
@@ -101,7 +101,7 @@ public class AsyncCall extends DefaultPromise<Message> {
     }
 
     if (LOG.isTraceEnabled()) {
-      long callTime = EnvironmentEdgeManager.currentTimeMillis() - startTime;
+      long callTime = EnvironmentEdgeManager.currentTime() - startTime;
       LOG.trace("Call: " + method.getName() + ", callTime: " + callTime + "ms");
     }
 

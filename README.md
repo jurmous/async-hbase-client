@@ -15,13 +15,13 @@ enables more types of async RPC calls than HBase enables which is currently most
 <dependency>
   <groupId>org.mousio</groupId>
   <artifactId>async-hbase-client</artifactId>
-  <version>0.9.0</version>
+  <version>1.0.0-SNAPSHOT</version>
 </dependency>
 ```
 
 ## Gradle
 ```
-compile 'org.mousio:async-hbase-client:0.9.0'
+compile 'org.mousio:async-hbase-client:1.0.0-SNAPSHOT'
 ```
 
 ## Manually
@@ -29,7 +29,7 @@ Visit [AHC Github releases page](https://github.com/jurmous/async-hbase-client/r
 
 # Currently supported HBase version
 
-This implementation is based on HBase 0.98. But since it is based on the protobuf api it should be
+This implementation is based on HBase 1.0. But since it is based on the protobuf api it should be
 able to communicate with different versions of HBase using the version "0" api.
 
 # Current status
@@ -64,7 +64,7 @@ Not yet implemented:
 ```Java
 
 Configuration configuration = ...;// Your HBase configuration
-connection = HConnectionManager.createConnection(configuration);
+Connection connection = ConnectionFactory.createConnection(configuration);
 
 client = new HBaseClient(connection);
 
