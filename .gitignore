@@ -10,6 +10,7 @@ target/
 .settings/
 .project
 .classpath
+.DS_Store
 
 # ignore IntelliJ idea folders and settings
 .idea/

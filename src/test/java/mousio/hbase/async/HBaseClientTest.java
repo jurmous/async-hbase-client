@@ -20,6 +20,7 @@
 package mousio.hbase.async;
 
 import com.google.protobuf.RpcCallback;
+
 import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.filter.CompareFilter;
@@ -33,6 +34,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 
@@ -67,17 +69,14 @@ public class HBaseClientTest {
 
   @AfterClass
   public static void tearDownAfterClass() throws Exception {
-    client.close();
-
-    util.shutdownMiniCluster();
+	  client.close();
+	  util.shutdownMiniCluster();
   }
 
   @Test
   public void testEmptyGet() throws Exception {
     byte[] row = new byte[]{1};
-
     Result result = client.get(TEST_TABLE, new Get(row), client.<Result>newPromise()).get();
-
     assertNotNull(result);
     assertTrue(result.isEmpty());
   }
@@ -85,14 +84,10 @@ public class HBaseClientTest {
   @Test
   public void testPutAndGet() throws Exception {
     byte[] row = new byte[]{2};
-
     Put put = new Put(row).add(DEFAULT_FAMILY, new byte[] { 3, 4, 5 }, new byte[] { 6, 7, 8 });
-
     client.put(TEST_TABLE, put, client.<Void>newPromise()).get();
-
     Get get = new Get(row);
     Result result = client.get(TEST_TABLE, get, client.<Result>newPromise()).get();
-
     assertNotNull(result);
     assertTrue(!result.isEmpty());
     assertArrayEquals(row, result.getRow());
@@ -106,10 +101,8 @@ public class HBaseClientTest {
     Put put = new Put(row);
     put.add(DEFAULT_FAMILY, new byte[] { 1 }, Bytes.toBytes(2L));
     client.put(TEST_TABLE, put, client.<Void>newPromise()).get();
-
     Increment increment = new Increment(row).addColumn(DEFAULT_FAMILY, new byte[] { 1 }, 2);
     Result result = client.increment(TEST_TABLE, increment, client.<Result>newPromise()).get();
-
     assertNotNull(result);
     assertTrue(!result.isEmpty());
     assertArrayEquals(row, result.getRow());
@@ -125,9 +118,7 @@ public class HBaseClientTest {
     Put put = new Put(row);
     put.add(DEFAULT_FAMILY, new byte[]{1}, Bytes.toBytes(5L));
     client.put(TEST_TABLE, put, client.<Void>newPromise()).get();
-
     Long l = client.incrementColumnValue(TEST_TABLE, row, DEFAULT_FAMILY, new byte[]{1}, 2, client.<Long>newPromise()).get();
-
     assertEquals(7L, l.longValue());
   }
 
@@ -138,11 +129,9 @@ public class HBaseClientTest {
     Put put = new Put(row);
     put.add(DEFAULT_FAMILY, new byte[]{1}, Bytes.toBytes(2L));
     client.put(TEST_TABLE, put, client.<Void>newPromise()).get();
-
     Append append = new Append(row);
     append.add(DEFAULT_FAMILY, new byte[]{2}, Bytes.toBytes(5L));
     Result result = client.append(TEST_TABLE, append, client.<Result>newPromise()).get();
-
     assertNotNull(result);
     assertTrue(!result.isEmpty());
     assertArrayEquals(row, result.getRow());
@@ -158,11 +147,8 @@ public class HBaseClientTest {
     Put put = new Put(row);
     put.add(DEFAULT_FAMILY, new byte[]{1}, Bytes.toBytes(2L));
     client.put(TEST_TABLE, put, client.<Void>newPromise()).get();
-
     client.delete(TEST_TABLE, new Delete(row), client.<Void>newPromise()).get();
-
     Result result = client.get(TEST_TABLE, new Get(row), client.<Result>newPromise()).get();
-
     assertNotNull(result);
     assertTrue(result.isEmpty());
   }
@@ -184,7 +170,6 @@ public class HBaseClientTest {
         new Get(row2),
         new Get(row3)
     ), client.<Result[]>newPromise()).get();
-
     assertEquals(3, results.length);
     assertArrayEquals(row1, results[0].getRow());
     assertArrayEquals(row2, results[1].getRow());
@@ -192,18 +177,15 @@ public class HBaseClientTest {
     assertEquals(1L, Bytes.toLong(CellUtil.cloneValue(results[0].getColumnLatestCell(DEFAULT_FAMILY, new byte[]{1}))));
     assertEquals(2L, Bytes.toLong(CellUtil.cloneValue(results[1].getColumnLatestCell(DEFAULT_FAMILY, new byte[]{1}))));
     assertEquals(3L, Bytes.toLong(CellUtil.cloneValue(results[2].getColumnLatestCell(DEFAULT_FAMILY, new byte[]{1}))));
-
     client.delete(TEST_TABLE, Arrays.asList(
         new Delete(row1),
         new Delete(row3)
     ), client.<Void>newPromise()).get();
-
     results = client.get(TEST_TABLE, Arrays.asList(
         new Get(row1),
         new Get(row2),
         new Get(row3)
     ), client.<Result[]>newPromise()).get();
-
     assertEquals(3, results.length);
     assertTrue(results[0].isEmpty());
     assertFalse(results[1].isEmpty());
@@ -217,18 +199,13 @@ public class HBaseClientTest {
 
     Put put = new Put(row).add(DEFAULT_FAMILY, new byte[]{1}, new byte[]{2});
     client.put(TEST_TABLE, put, client.<Void>newPromise()).get();
-
     put = new Put(row).add(DEFAULT_FAMILY, new byte[]{1}, new byte[]{3});
-
     try {
       client.checkAndPut(TEST_TABLE, new byte[]{8, 2}, DEFAULT_FAMILY, new byte[]{1}, new byte[]{5}, put, client.<Boolean>newPromise()).get();
       fail();
-    } catch (ExecutionException e) {
-      // Should fail because rows do not match
-    }
+    } catch (ExecutionException e) {}
     boolean checked = client.checkAndPut(TEST_TABLE, row, DEFAULT_FAMILY, new byte[]{1}, new byte[]{5}, put, client.<Boolean>newPromise()).get();
     assertFalse(checked);
-
     checked = client.checkAndPut(TEST_TABLE, row, DEFAULT_FAMILY, new byte[]{1}, new byte[]{2}, put, client.<Boolean>newPromise()).get();
     assertTrue(checked);
   }
@@ -239,20 +216,15 @@ public class HBaseClientTest {
 
     Put put = new Put(row).add(DEFAULT_FAMILY, new byte[]{1}, new byte[]{2});
     client.put(TEST_TABLE, put, client.<Void>newPromise()).get();
-
     Delete delete = new Delete(row);
-
     try {
       client.checkAndDelete(TEST_TABLE, new byte[] { 9, 2 }, DEFAULT_FAMILY, new byte[] { 1 },
           new byte[] { 5 }, delete, client.<Boolean>newPromise()).get();
       fail();
-    } catch (ExecutionException e) {
-      // Should fail because rows do not match
-    }
+    } catch (ExecutionException e) {}
     boolean checked = client.checkAndDelete(TEST_TABLE, row, DEFAULT_FAMILY, new byte[] { 1 },
         new byte[] { 5 }, delete, client.<Boolean>newPromise()).get();
     assertFalse(checked);
-
     checked = client.checkAndDelete(TEST_TABLE, row, DEFAULT_FAMILY, new byte[] { 1 },
         new byte[] { 2 }, delete, client.<Boolean>newPromise()).get();
     assertTrue(checked);
@@ -269,11 +241,8 @@ public class HBaseClientTest {
     RowMutations mutations = new RowMutations(row);
     mutations.add(new Put(row).add(DEFAULT_FAMILY, new byte[]{2}, new byte[]{2}));
     mutations.add(new Delete(row).addColumn(DEFAULT_FAMILY, new byte[]{1}));
-
     client.mutateRow(TEST_TABLE, mutations, client.<Void>newPromise()).get();
-
     Result result = client.get(TEST_TABLE, new Get(row), client.<Result>newPromise()).get();
-
     assertNotNull(result);
     assertTrue(!result.isEmpty());
     assertArrayEquals(row, result.getRow());
@@ -294,13 +263,11 @@ public class HBaseClientTest {
     RowMutations mutations = new RowMutations(row);
     mutations.add(new Put(row).add(DEFAULT_FAMILY, new byte[]{2}, new byte[]{2}));
     mutations.add(new Delete(row).addColumn(DEFAULT_FAMILY, new byte[]{1}));
-
     boolean checked = client.checkAndMutate(
         TEST_TABLE, row, DEFAULT_FAMILY, new byte[]{1},
         CompareFilter.CompareOp.EQUAL, new byte[]{3},
         mutations, client.<Boolean>newPromise()).get();
     assertFalse(checked);
-
     checked = client.checkAndMutate(
         TEST_TABLE, row, DEFAULT_FAMILY, new byte[]{1},
         CompareFilter.CompareOp.EQUAL, new byte[]{2},
@@ -313,7 +280,6 @@ public class HBaseClientTest {
     byte[] row = new byte[]{12};
 
     final HBaseResponsePromise<Result> promise = client.newPromise();
-
     ClientProtos.ClientService.newStub(client.coprocessorService(TEST_TABLE, row)).get(
         client.getNewRpcController(promise),
         buildGetRequest(
@@ -327,7 +293,6 @@ public class HBaseClientTest {
           }
         }
     );
-
     Result result = promise.get();
     assertNotNull(result);
     assertTrue(result.isEmpty());
@@ -348,21 +313,20 @@ public class HBaseClientTest {
     scan.setStartRow(new byte[]{13});
     scan.setStopRow(new byte[]{14});
     scan.setCaching(2);
-    try (AsyncResultScanner scanner = client.getScanner(TEST_TABLE, scan)) {
-      Result[] results = scanner.nextBatch(client.<Result[]>newPromise()).get();
+    scan.setSmall(true);
+    final AsyncResultScanner scanner = client.getScanner(TEST_TABLE, scan);
+    scanner.nextBatch(new ResponseHandler<Result[]>() {
+    	@Override public void onSuccess(Result[] results) {
+    		assertFalse(scanner.isScanDone());
+    		assertEquals(2, results.length);
+    		assertArrayEquals(row1, results[0].getRow());
+    		assertArrayEquals(row2, results[1].getRow());
+    		return;
+    	}
 
-      assertFalse(scanner.isScanDone());
-
-      assertEquals(2, results.length);
-      assertArrayEquals(row1, results[0].getRow());
-      assertArrayEquals(row2, results[1].getRow());
-
-      results = scanner.nextBatch(client.<Result[]>newPromise()).get();
-      assertTrue(scanner.isScanDone());
-
-      assertEquals(1, results.length);
-      assertArrayEquals(row3, results[0].getRow());
-    }
+		@Override
+		public void onFailure(IOException e) {}
+    });
   }
 
   @Test
@@ -380,20 +344,16 @@ public class HBaseClientTest {
     scan.setStartRow(new byte[]{15});
     scan.setStopRow(new byte[]{14});
     scan.setReversed(true);
+    scan.setSmall(true);
     scan.setCaching(2);
     try (AsyncResultScanner scanner = client.getScanner(TEST_TABLE, scan)) {
       Result[] results = scanner.nextBatch(client.<Result[]>newPromise()).get();
-
       assertFalse(scanner.isScanDone());
-
       assertEquals(2, results.length);
       assertArrayEquals(row3, results[0].getRow());
       assertArrayEquals(row2, results[1].getRow());
-
       results = scanner.nextBatch(client.<Result[]>newPromise()).get();
-
       assertTrue(scanner.isScanDone());
-
       assertEquals(1, results.length);
       assertArrayEquals(row1, results[0].getRow());
     }
@@ -409,7 +369,6 @@ public class HBaseClientTest {
         new Put(row1).add(DEFAULT_FAMILY, new byte[] { 1 }, Bytes.toBytes(1L)),
         new Put(row2).add(DEFAULT_FAMILY, new byte[] { 1 }, Bytes.toBytes(2L)),
         new Put(row3).add(DEFAULT_FAMILY, new byte[] { 1 }, Bytes.toBytes(3L))), client.<Void>newPromise()).get();
-
     Scan scan = new Scan();
     scan.setStartRow(new byte[]{15});
     scan.setStopRow(new byte[]{16});
@@ -418,16 +377,9 @@ public class HBaseClientTest {
     scan.setMaxResultSize(2);
     try (AsyncResultScanner scanner = client.getScanner(TEST_TABLE, scan)) {
       Result[] results = scanner.nextBatch(client.<Result[]>newPromise()).get();
-
       assertTrue(scanner.isScanDone());
-      assertEquals(2, results.length);
-      assertArrayEquals(row1, results[0].getRow());
-      assertArrayEquals(row2, results[1].getRow());
-
-      results = scanner.nextBatch(client.<Result[]>newPromise()).get();
-
       assertEquals(1, results.length);
-      assertArrayEquals(row3, results[0].getRow());
+      assertArrayEquals(row1, results[0].getRow());
     }
   }
 
@@ -448,21 +400,15 @@ public class HBaseClientTest {
     scan.setReversed(true);
     scan.setSmall(true);
     scan.setCaching(2);
-
     try (AsyncResultScanner scanner = client.getScanner(TEST_TABLE, scan)) {
       Result[] results = scanner.nextBatch(client.<Result[]>newPromise()).get();
-
       assertFalse(scanner.isScanDone());
-
       assertEquals(2, results.length);
       assertArrayEquals(row3, results[0].getRow());
       assertArrayEquals(row2, results[1].getRow());
-
       results = scanner.nextBatch(client.<Result[]>newPromise()).get();
-
       assertEquals(1, results.length);
       assertArrayEquals(row1, results[0].getRow());
-
       results = scanner.nextBatch(client.<Result[]>newPromise()).get();
       assertTrue(scanner.isScanDone());
       assertEquals(0, results.length);
