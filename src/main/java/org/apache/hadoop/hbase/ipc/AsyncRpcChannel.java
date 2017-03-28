@@ -20,6 +20,7 @@ package org.apache.hadoop.hbase.ipc;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Message;
 import com.google.protobuf.RpcCallback;
+
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufOutputStream;
@@ -31,6 +32,7 @@ import io.netty.util.Timeout;
 import io.netty.util.TimerTask;
 import io.netty.util.concurrent.GenericFutureListener;
 import io.netty.util.concurrent.Promise;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.HConstants;
@@ -52,10 +54,11 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
 import org.apache.hadoop.security.token.TokenSelector;
-import org.htrace.Span;
-import org.htrace.Trace;
+import org.apache.htrace.Span;
+import org.apache.htrace.Trace;
 
 import javax.security.sasl.SaslException;
+
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
@@ -528,7 +531,7 @@ public class AsyncRpcChannel {
    * @param authMethod to write
    */
   private void createPreamble(ByteBuf byteBuf, AuthMethod authMethod) {
-    byteBuf.writeBytes(HConstants.RPC_HEADER.array());
+    byteBuf.writeBytes(HConstants.RPC_HEADER.clone());//.array());
     byteBuf.writeByte(HConstants.RPC_CURRENT_VERSION);
     byteBuf.writeByte(authMethod.code);
   }
