@@ -17,13 +17,13 @@
  */
 package org.apache.hadoop.hbase.security;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelDuplexHandler;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelPromise;
+import shaded.hbase.common.io.netty.buffer.ByteBuf;
+import shaded.hbase.common.io.netty.channel.Channel;
+import shaded.hbase.common.io.netty.channel.ChannelDuplexHandler;
+import shaded.hbase.common.io.netty.channel.ChannelFuture;
+import shaded.hbase.common.io.netty.channel.ChannelFutureListener;
+import shaded.hbase.common.io.netty.channel.ChannelHandlerContext;
+import shaded.hbase.common.io.netty.channel.ChannelPromise;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;

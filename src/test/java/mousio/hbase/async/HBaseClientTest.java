@@ -19,7 +19,7 @@
 
 package mousio.hbase.async;
 
-import com.google.protobuf.RpcCallback;
+import shaded.hbase.com.google.protobuf.RpcCallback;
 
 import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.client.*;

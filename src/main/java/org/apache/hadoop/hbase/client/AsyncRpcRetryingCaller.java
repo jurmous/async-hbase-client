@@ -19,9 +19,9 @@
 
 package org.apache.hadoop.hbase.client;
 
-import com.google.protobuf.ServiceException;
-import io.netty.util.Timeout;
-import io.netty.util.TimerTask;
+import shaded.hbase.com.google.protobuf.ServiceException;
+import shaded.hbase.common.io.netty.util.Timeout;
+import shaded.hbase.common.io.netty.util.TimerTask;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.DoNotRetryIOException;

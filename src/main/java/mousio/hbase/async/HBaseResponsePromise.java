@@ -1,7 +1,7 @@
 package mousio.hbase.async;
 
-import io.netty.util.concurrent.DefaultPromise;
-import io.netty.util.concurrent.EventExecutor;
+import shaded.hbase.common.io.netty.util.concurrent.DefaultPromise;
+import shaded.hbase.common.io.netty.util.concurrent.EventExecutor;
 import org.apache.hadoop.hbase.client.ResponseHandler;
 
 import java.io.IOException;

@@ -17,11 +17,11 @@
  */
 package org.apache.hadoop.hbase.ipc;
 
-import com.google.protobuf.Message;
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufInputStream;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
+import shaded.hbase.com.google.protobuf.Message;
+import shaded.hbase.common.io.netty.buffer.ByteBuf;
+import shaded.hbase.common.io.netty.buffer.ByteBufInputStream;
+import shaded.hbase.common.io.netty.channel.ChannelHandlerContext;
+import shaded.hbase.common.io.netty.channel.ChannelInboundHandlerAdapter;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.CellScanner;

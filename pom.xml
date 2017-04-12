@@ -38,18 +38,23 @@
     		<artifactId>htrace-core</artifactId>
     		<version>${htrace.version}</version>
 		</dependency>
-    	<dependency>
-      		<groupId>org.apache.hbase</groupId>
-      		<artifactId>hbase-client</artifactId>
-      		<version>${hbase.version}</version>
-      		<scope>compile</scope>
-      		<exclusions>
-        		<exclusion>
-          			<artifactId>*</artifactId>
-          			<groupId>org.slf4j</groupId>
-        		</exclusion>
-      		</exclusions>
-    	</dependency>
+    	<!--<dependency>-->
+      		<!--<groupId>org.apache.hbase</groupId>-->
+      		<!--<artifactId>hbase-client</artifactId>-->
+      		<!--<version>${hbase.version}</version>-->
+      		<!--<scope>compile</scope>-->
+      		<!--<exclusions>-->
+        		<!--<exclusion>-->
+          			<!--<artifactId>*</artifactId>-->
+          			<!--<groupId>org.slf4j</groupId>-->
+        		<!--</exclusion>-->
+      		<!--</exclusions>-->
+    	<!--</dependency>-->
+        <dependency>
+            <groupId>uk.gov.ho</groupId>
+            <artifactId>hbase-shaded-guava</artifactId>
+            <version>0.0.2-SNAPSHOT</version>
+        </dependency>
     	<dependency>
       		<groupId>junit</groupId>
       		<artifactId>junit</artifactId>
@@ -62,18 +67,18 @@
       		<version>${slf4j.version}</version>
       		<scope>test</scope>
     	</dependency>
-    	<dependency>
-      		<groupId>org.apache.hbase</groupId>
-      		<artifactId>hbase-testing-util</artifactId>
-      		<version>${hbase.version}</version>
-      		<scope>test</scope>
-    	</dependency>
-    	<dependency>
-      		<groupId>org.apache.hadoop</groupId>
-      		<artifactId>hadoop-minicluster</artifactId>
-      		<version>${hadoop.mini.version}</version>
-      		<scope>test</scope>
-    	</dependency>
+    	<!--<dependency>-->
+      		<!--<groupId>org.apache.hbase</groupId>-->
+      		<!--<artifactId>hbase-testing-util</artifactId>-->
+      		<!--<version>${hbase.version}</version>-->
+      		<!--<scope>test</scope>-->
+    	<!--</dependency>-->
+    	<!--<dependency>-->
+      		<!--<groupId>org.apache.hadoop</groupId>-->
+      		<!--<artifactId>hadoop-minicluster</artifactId>-->
+      		<!--<version>${hadoop.mini.version}</version>-->
+      		<!--<scope>test</scope>-->
+    	<!--</dependency>-->
   	</dependencies>
   	<build>
         <testSourceDirectory>${basedir}/src/test/java</testSourceDirectory>
