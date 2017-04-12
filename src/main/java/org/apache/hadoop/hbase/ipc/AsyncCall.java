@@ -17,10 +17,10 @@
  */
 package org.apache.hadoop.hbase.ipc;
 
-import com.google.protobuf.Descriptors;
-import com.google.protobuf.Message;
-import io.netty.channel.EventLoop;
-import io.netty.util.concurrent.DefaultPromise;
+import shaded.hbase.com.google.protobuf.Descriptors;
+import shaded.hbase.com.google.protobuf.Message;
+import shaded.hbase.common.io.netty.channel.EventLoop;
+import shaded.hbase.common.io.netty.util.concurrent.DefaultPromise;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.CellScanner;

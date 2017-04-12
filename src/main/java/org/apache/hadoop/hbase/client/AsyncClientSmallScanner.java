@@ -18,7 +18,7 @@
  */
 package org.apache.hadoop.hbase.client;
 
-import com.google.protobuf.RpcCallback;
+import shaded.hbase.com.google.protobuf.RpcCallback;
 import mousio.hbase.async.HBaseClient;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;

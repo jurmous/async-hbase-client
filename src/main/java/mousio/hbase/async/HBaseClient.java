@@ -1,7 +1,7 @@
 package mousio.hbase.async;
 
-import com.google.protobuf.RpcCallback;
-import com.google.protobuf.RpcChannel;
+import shaded.hbase.com.google.protobuf.RpcCallback;
+import shaded.hbase.com.google.protobuf.RpcChannel;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionLocation;
 import org.apache.hadoop.hbase.TableName;

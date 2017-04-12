@@ -17,23 +17,26 @@
  */
 package org.apache.hadoop.hbase.ipc;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.protobuf.Descriptors;
-import com.google.protobuf.Message;
-import com.google.protobuf.RpcCallback;
-import com.google.protobuf.RpcChannel;
-import com.google.protobuf.RpcController;
-import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.util.HashedWheelTimer;
-import io.netty.util.concurrent.EventExecutor;
-import io.netty.util.concurrent.Future;
-import io.netty.util.concurrent.GenericFutureListener;
-import io.netty.util.concurrent.Promise;
+import shaded.hbase.com.google.common.annotations.VisibleForTesting;
+import shaded.hbase.com.google.protobuf.Descriptors;
+import shaded.hbase.com.google.protobuf.Descriptors.MethodDescriptor;
+import shaded.hbase.com.google.protobuf.Message;
+import shaded.hbase.com.google.protobuf.RpcCallback;
+import shaded.hbase.com.google.protobuf.RpcChannel;
+import shaded.hbase.com.google.protobuf.RpcController;
+
+import shaded.hbase.common.io.netty.bootstrap.Bootstrap;
+import shaded.hbase.common.io.netty.channel.ChannelInitializer;
+import shaded.hbase.common.io.netty.channel.ChannelOption;
+import shaded.hbase.common.io.netty.channel.nio.NioEventLoopGroup;
+import shaded.hbase.common.io.netty.channel.socket.SocketChannel;
+import shaded.hbase.common.io.netty.channel.socket.nio.NioSocketChannel;
+import shaded.hbase.common.io.netty.util.HashedWheelTimer;
+import shaded.hbase.common.io.netty.util.concurrent.EventExecutor;
+import shaded.hbase.common.io.netty.util.concurrent.Future;
+import shaded.hbase.common.io.netty.util.concurrent.GenericFutureListener;
+import shaded.hbase.common.io.netty.util.concurrent.Promise;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.HConstants;
@@ -147,26 +150,25 @@ public class AsyncRpcClient extends AbstractRpcClient {
    * @throws InterruptedException if call is interrupted
    * @throws java.io.IOException  if a connection failure is encountered
    */
-  @Override protected Pair<Message, CellScanner> call(PayloadCarryingRpcController pcrc,
-      Descriptors.MethodDescriptor md, Message param, CellScanner cells, Message returnType, User ticket,
-      InetSocketAddress addr, int callTimeout, int priority) throws IOException, InterruptedException {
+  @Override
+	protected Pair<Message, CellScanner> call(PayloadCarryingRpcController pcrc,
+			MethodDescriptor md, Message param, Message returnType, User ticket,
+			InetSocketAddress addr) throws IOException, InterruptedException {
+	  final AsyncRpcChannel connection = createRpcChannel(md.getService().getName(), addr, ticket);
 
-    final AsyncRpcChannel connection = createRpcChannel(md.getService().getName(), addr, ticket);
+	    Promise<Message> promise = connection.callMethodWithPromise(md, pcrc, param, returnType);
 
-    Promise<Message> promise = connection.callMethodWithPromise(md, pcrc, param, returnType);
-
-    try {
-      Message response = promise.get();
-      return new Pair<>(response, pcrc.cellScanner());
-    } catch (ExecutionException e) {
-      if (e.getCause() instanceof IOException) {
-        throw (IOException) e.getCause();
-      } else {
-        throw new IOException(e.getCause());
-      }
-    }
-  }
-
+	    try {
+	      Message response = promise.get();
+	      return new Pair<>(response, pcrc.cellScanner());
+	    } catch (ExecutionException e) {
+	      if (e.getCause() instanceof IOException) {
+	        throw (IOException) e.getCause();
+	      } else {
+	        throw new IOException(e.getCause());
+	      }
+	    }
+}
   /**
    * Call method async
    */
